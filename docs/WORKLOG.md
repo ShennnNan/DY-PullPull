@@ -132,9 +132,12 @@ v0.1 计划包含逐步 TDD 测试、精确文件路径、验证命令和分任�
 本地默认分支已由 `master` 更名为 `main`。GitHub 连接账户为
 `ShennnNan`，检查时没有发现同名的 `DY-PullPull` 仓库。
 
-发布尚未完成：当前环境未安装 GitHub CLI，GitHub 浏览器页面也尚未
-登录。完成 GitHub 登录后即可创建公开仓库、添加 `origin` 并推送
-本地提交历史。
+GitHub 登录完成后，已创建公共仓库：
+
+- https://github.com/ShennnNan/DY-PullPull
+
+本地仓库已添加 `origin`，`main` 已推送并设置为跟踪
+`origin/main`。公开仓库包含从设计、计划到公开化准备的完整提交历史。
 
 ## 下一步
 
