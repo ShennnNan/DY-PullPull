@@ -140,7 +140,7 @@ def test_skill_has_required_layout():
 Run:
 
 ```powershell
-$python = "C:\Users\imqia\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+$python = (Get-Command python -ErrorAction Stop).Source
 & $python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 .\.venv\Scripts\python.exe -m pytest tests/test_skill_layout.py -v
@@ -155,7 +155,7 @@ If that bundled path differs on another Codex installation, call the Codex works
 Run:
 
 ```powershell
-$skillCreator = "C:\Users\imqia\.codex\skills\.system\skill-creator"
+$skillCreator = Join-Path $HOME ".codex\skills\.system\skill-creator"
 & .\.venv\Scripts\python.exe "$skillCreator\scripts\init_skill.py" `
   douyin-favorites-to-articles `
   --path skill `
@@ -1501,7 +1501,7 @@ description: 将用户本人可访问的抖音收藏或抖音分享链接增量�
 Run:
 
 ```powershell
-$skillCreator = "C:\Users\imqia\.codex\skills\.system\skill-creator"
+$skillCreator = Join-Path $HOME ".codex\skills\.system\skill-creator"
 & .\.venv\Scripts\python.exe "$skillCreator\scripts\generate_openai_yaml.py" `
   "skill\douyin-favorites-to-articles" `
   --interface "display_name=抖音收藏文章提炼" `
@@ -1529,7 +1529,7 @@ Create `docs/customer/privacy.md`:
 Run:
 
 ```powershell
-$skillCreator = "C:\Users\imqia\.codex\skills\.system\skill-creator"
+$skillCreator = Join-Path $HOME ".codex\skills\.system\skill-creator"
 & .\.venv\Scripts\python.exe "$skillCreator\scripts\quick_validate.py" "skill\douyin-favorites-to-articles"
 .\.venv\Scripts\python.exe -m pytest tests/test_skill_layout.py -v
 ```
@@ -1603,7 +1603,7 @@ Run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v
-$skillCreator = "C:\Users\imqia\.codex\skills\.system\skill-creator"
+$skillCreator = Join-Path $HOME ".codex\skills\.system\skill-creator"
 & .\.venv\Scripts\python.exe "$skillCreator\scripts\quick_validate.py" "skill\douyin-favorites-to-articles"
 git diff --check
 git status --short
