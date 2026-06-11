@@ -1,0 +1,4 @@
+interface:
+  display_name: "抖音收藏文章提炼"
+  short_description: "把个人抖音收藏增量整理为本地 Markdown 文章"
+  default_prompt: "同步我本人可访问的抖音收藏，并将新增内容整理为本地文章。"
