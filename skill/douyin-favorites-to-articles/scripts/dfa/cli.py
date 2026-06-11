@@ -74,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "prepare":
-        transcript = args.transcript.read_text(encoding="utf-8")
+        transcript = args.transcript.read_text(encoding="utf-8-sig")
         workspace = TaskWorkspace(paths.temp, args.video_id)
         request = prepare_article_request(
             workspace.create(),

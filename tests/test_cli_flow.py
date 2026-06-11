@@ -91,3 +91,51 @@ def test_cli_register_prepare_finalize_flow(tmp_path, capsys):
     assert (data_root / "articles" / "index.md").is_file()
     assert not (data_root / "temp" / "123").exists()
     assert "completed" in capsys.readouterr().out
+
+
+def test_prepare_strips_utf8_bom_from_transcript(tmp_path):
+    data_root = tmp_path / "data"
+    transcript = tmp_path / "transcript.txt"
+    transcript.write_text("带 BOM 的转写文本。", encoding="utf-8-sig")
+
+    main(["--data-root", str(data_root), "init"])
+    main(["--data-root", str(data_root), "add-url", "https://www.douyin.com/video/321"])
+    main(["--data-root", str(data_root), "prepare", "321", "--transcript", str(transcript)])
+
+    request_path = data_root / "temp" / "321" / "article-request.json"
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    assert request["transcript"] == "带 BOM 的转写文本。"
+
+
+def test_finalize_failure_preserves_workspace_and_records_failure(tmp_path):
+    data_root = tmp_path / "data"
+    main(["--data-root", str(data_root), "init"])
+    main(
+        [
+            "--data-root",
+            str(data_root),
+            "add-url",
+            "https://www.douyin.com/video/456",
+        ]
+    )
+    workspace = data_root / "temp" / "456"
+    workspace.mkdir(parents=True)
+    invalid = workspace / "article.md"
+    invalid.write_text("# 不完整文章\n", encoding="utf-8")
+
+    result = main(
+        [
+            "--data-root",
+            str(data_root),
+            "finalize",
+            "456",
+            "--article",
+            str(invalid),
+        ]
+    )
+
+    record = Library(data_root / "library.db").get_video("456")
+    assert result == 2
+    assert record.status is VideoStatus.FAILED
+    assert record.failed_stage == "article"
+    assert workspace.exists()
