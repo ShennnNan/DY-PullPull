@@ -125,6 +125,17 @@ v0.1 计划包含逐步 TDD 测试、精确文件路径、验证命令和分任�
 - 添加源码可见但保留全部权利的专有许可证。
 - 准备将默认分支改为 `main` 并发布到 GitHub。
 
+公开化材料提交：
+
+- `d25349f docs: prepare DY-PullPull public project`
+
+本地默认分支已由 `master` 更名为 `main`。GitHub 连接账户为
+`ShennnNan`，检查时没有发现同名的 `DY-PullPull` 仓库。
+
+发布尚未完成：当前环境未安装 GitHub CLI，GitHub 浏览器页面也尚未
+登录。完成 GitHub 登录后即可创建公开仓库、添加 `origin` 并推送
+本地提交历史。
+
 ## 下一步
 
 公开仓库建立后，从 `v0.1 Foundation` 的 Task 1 重新开始：
