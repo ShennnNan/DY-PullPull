@@ -289,8 +289,25 @@ GitHub 登录完成后，已创建公共仓库：
 
 本条仅为方向与计划记录，代码尚未按新路径改动。
 
+## 2026-06-16：P1 单条闭环完成
+
+新建轻量包 `pullpull`（与重设计的 `dfa` 并存，复用其 `media`/`urls`/`models`，不引入 SQLite）：
+
+- `pullpull/transcribe.py`：FunASR `paraformer-zh` 转写器，模型懒加载，导入不依赖 funasr，便于注入假实现做单测。
+- `pullpull/pull.py`：单条编排 `下载 → 转写 → 写 md`，临时媒体用 `TemporaryDirectory` 用后即删；产物 ID 取 yt-dlp 落盘的真实视频 ID。
+- `pullpull/cli.py` + `pullpull_cli.py`：命令行入口 `<url> --out <dir> [--cookies-from-browser]`。
+- 下载复用 v0.2 的 `dfa.media`（yt-dlp + 依赖注入），转写引擎换成 FunASR。
+- 产物为单份 Markdown：来源 frontmatter + 标题 + `## 原文`；`## 总结`留待 P2。
+
+验收：
+
+- 新增 3 个单元测试（render、下载+转写+写盘、临时媒体清理），用 FakeRunner / FakeTranscriber 注入；全套 51 passed / 2 skipped。
+- 真实端到端（公开链接，输出在仓库外、不入库）：yt-dlp 取得真实 `video_id` / 作者 / 发布日期 → FunASR 转写 → 写出 md，临时媒体清除。
+- **CPU 转写性能实测 RTF ≈ 0.17**（约 145 秒语音 24 秒转完），印证"FunASR 在 CPU 也快"的引擎决策。
+- 开发环境：因原 `D:\AI Skill\DY-pullpull` 已不存在，在 `D:\AI Skills\DY PULLPULL\DY-PullPull` 重建检出；复用既有 FunASR venv，补装 yt-dlp / pytest / faster-whisper（备选引擎）。
+
 ## 下一步
 
-1. 建立新路径的本地开发检出与环境（本机原 `D:\AI Skill\DY-pullpull` 开发目录已不存在，需重建工作副本）。
-2. 实施 **P1 单条闭环**：把"yt-dlp 下载 → FunASR 转写 → 写一份 md"串成一个命令并加回归测试。
-3. 进入 P2 AI 整理与 P3 账户批量。
+1. **P2 AI 整理**：对转写原文做清洗纠错（同音字、英文术语、补漏）并生成总结，md 输出"原文 + 总结"两段。
+2. **P3 目标 2（账户批量）**：用 yt-dlp 枚举账户主页全部作品，逐条复用 `pullpull.pull`，加 `index.json` 去重与断点续跑。
+3. （可选）补齐本机 cuBLAS/cuDNN，让 faster-whisper 备选档在 GPU 上可用。

@@ -15,6 +15,7 @@ dev = [
 ]
 media = [
     "yt-dlp>=2025.1",
+    "funasr>=1.0.0",
     "faster-whisper>=1.1,<2",
 ]
 gpu = [
