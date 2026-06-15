@@ -16,14 +16,14 @@ DY-PullPull 是一个正在设计中的 Windows Codex Skill，目标是把用户
 
 ## 当前状态
 
-项目已完成 **v0.1 Foundation**：Skill 具备"单条抖音链接 + 本地转写文本 → Markdown 文章"的最小可运行闭环。收藏页采集、媒体提取、Whisper 转写和 OCR（v0.2/v0.3）尚未开始。
+项目已完成 **v0.2 Local Media**：Skill 现在只需一条抖音链接，即可自动用 yt-dlp 下载视频、faster-whisper 本地转写（GPU 优先、CPU 回退），生成 Markdown 文章。收藏页/账户批量采集与 OCR（v0.3）尚未开始。
 
 已经完成：
 
 - 明确产品目标、用户范围与隐私边界。
 - 完成总体架构、模块、数据流和测试设计。
-- 完成 v0.1 基础闭环的 TDD 实施计划。
-- 完成 v0.1 Foundation：Skill 骨架、URL 规范化、SQLite 状态机、临时工作区、文章契约与 CLI 闭环，自动测试与 Skill 校验全部通过。
+- 完成 v0.1 Foundation：Skill 骨架、URL 规范化、SQLite 状态机、临时工作区、文章契约与 CLI 闭环。
+- 完成 v0.2 Local Media：一键 `pull` 自动下载（yt-dlp）+ 本地语音转写（faster-whisper，CUDA→CPU 回退），元数据自动回填，端到端验证产出文章。
 
 详细进展见 [工作日志](docs/WORKLOG.md)。
 

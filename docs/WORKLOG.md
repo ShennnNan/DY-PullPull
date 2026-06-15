@@ -193,10 +193,37 @@ GitHub 登录完成后，已创建公共仓库：
 
 将工作目录完整迁移到 `D:\AI Skill\DY-pullpull`（此前为 `D:\DY-Pullpull`）。迁移前确认主分支干净、无未推送提交、v0.1 隔离 worktree 已合并；移除该 worktree 后整体搬迁，并在新位置重建虚拟环境，重新跑通全部 18 个测试，git 远端与历史完好。
 
+## 2026-06-15：v0.2 Local Media 完成
+
+按 v0.2 实施计划完成全部 8 个任务，沿用 v0.1 的 TDD + 逐任务提交节奏，在隔离 worktree `codex/v0.2-local-media` 上进行：
+
+1. media/gpu 可选依赖组与依赖可用性测试（`3f74f37`）。
+2. `devices.py` 设备/模型选择与 CPU 回退决策（`fa79b99`）。
+3. `media.py` yt-dlp 下载封装与错误码映射（`ed41a8d`）。
+4. `storage.update_metadata` 采集元数据回填（`84d6704`）。
+5. `extractor.py` faster-whisper 转写封装，CUDA 失败在首次迭代处回退 CPU（`227bef0`）。
+6. CLI `fetch` / `transcribe` / 一键 `pull` 命令与编排（`43331d4`）。
+7. SKILL.md、错误码、`references/media.md` 文档与 Skill 校验（`11f1d8e`）。
+8. 边界验收与日志同步（本条）。
+
+关键设计决策：
+
+- 下载引擎采用 `yt-dlp` 的 Python API（非外部二进制），需登录内容用 `--cookies-from-browser` 复用用户本人登录态。
+- 基于演示发现 faster-whisper 通过内置 PyAV 直接解码下载的媒体，v0.2 **不再单独调用 FFmpeg 抽音频**；FFmpeg 推迟到 v0.3 关键帧/OCR。
+- 设备/模型/精度可经 env 或命令行覆盖；默认 CUDA→large-v3/int8_float16，CPU→small/int8；任何 CUDA 失败自动回退 CPU 并在输出注明实际设备。
+- `published_at` 经 workspace 元数据透传到文章请求，未改动 `videos` 表结构。
+
+验收结果：
+
+- 46 个单元测试通过、1 个真实下载集成测试默认跳过；外部工具在单测中以 fake 注入。
+- 真实端到端：`pull <公开链接>` 实际下载 + 转写（本机缺 cuBLAS/cuDNN，CUDA 尝试后自动回退 cpu/small）→ 元数据回填标题/作者/发布日期 → 生成文章请求 → 写文章 → `finalize` → `completed`、临时媒体清除。
+- Skill `quick_validate.py` 校验通过。
+
+已知遗留（留待 v0.2 后续小迭代或 v0.4 doctor 处理）：本机缺 cuBLAS/cuDNN 运行库，GPU 加速尚未真正生效（当前全部走 CPU 回退）；`references/media.md` 已记录安装与排查方法。
+
+分支已合并回 `main`。
+
 ## 下一步
 
-按既定路线进入 v0.2 Local Media 实施：
-
-1. 撰写 v0.2 详细 TDD 实施计划（`yt-dlp` 下载、FFmpeg 抽音频、CUDA 检测、`faster-whisper`、CPU 回退、模型与设备可配置并写入日志）。
-2. 安装 FFmpeg 与 CUDA 运行库等 v0.2 运行依赖。
-3. 按计划逐任务实现并验收。
+1. （可选小迭代）补齐本机 GPU 运行库，验证 large-v3 在 4060/8GB 上的转写质量与速度。
+2. 进入 v0.3 Favorites Collection 规划：先做收藏页/账户主页的 URL 采集 spike（脱敏 HTML fixture），再写详细计划；批量采集到的链接逐条复用 v0.2 的 `pull`。
