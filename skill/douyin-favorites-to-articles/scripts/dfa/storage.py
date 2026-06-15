@@ -150,6 +150,27 @@ class Library:
         if cursor.rowcount != 1:
             raise KeyError(video_id)
 
+    def update_metadata(
+        self,
+        video_id: str,
+        title: str | None = None,
+        author_name: str | None = None,
+    ) -> None:
+        """回填采集到的标题/作者；传入 None 的字段保留原值，不改状态。"""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE videos
+                SET title = COALESCE(?, title),
+                    author_name = COALESCE(?, author_name),
+                    updated_at = ?
+                WHERE video_id = ?
+                """,
+                (title, author_name, _now(), video_id),
+            )
+        if cursor.rowcount != 1:
+            raise KeyError(video_id)
+
     def record_failure(
         self,
         video_id: str,
