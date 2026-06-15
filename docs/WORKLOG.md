@@ -239,6 +239,27 @@ GitHub 登录完成后，已创建公共仓库：
 
 本条目仅更新日志，不涉及代码改动。
 
+## 2026-06-16：转写引擎决策（FunASR paraformer-zh 主，faster-whisper 备选）
+
+当前优先级：先做出一套能用的系统、快速输出结果，质量靠后续迭代与 AI 后处理补足，而非一步到位追求最高转写精度。基于此调整转写引擎策略：
+
+- **主引擎改为 FunASR `paraformer-zh`**：非自回归模型，在无 GPU 运行库的 CPU 环境也能快速产出中文结果，自带 VAD 与标点（ct-punc）；模型体积小，吞吐高。
+- **faster-whisper 降为备选 / 回退**：GPU large-v3 在转写质量和中英混读上更强，保留用于后续质量迭代或特定场景。
+- **转写出入交由 AI 填补**：转写文本若有同音字、漏字、英文术语音译等出入，由 Codex/AI 在文章整理阶段填补与校正，不要求 ASR 一次到位。
+
+理由：
+
+- 目标 2（账户全部作品批量）对吞吐敏感，paraformer-zh 在当前 CPU 环境即可快速出结果。
+- 本机暂缺 cuBLAS/cuDNN，faster-whisper 现全程 CPU 回退；在补齐 GPU 前，paraformer-zh 是更快的 CPU 默认。
+- 同为中文 + CPU 的实测对比中，paraformer-zh 用更小模型即获得比 whisper-small 更干净可用的结果。
+- "速度优先 + AI 后处理纠错"符合"先能用、再迭代"的路线。
+
+影响（待后续实施，本条仅为决策记录，代码尚未改动）：
+
+- `extractor` 需新增 paraformer-zh 转写路径，引擎可配置；现有 faster-whisper 实现保留为 fallback。
+- 依赖新增 `funasr` / `torch` / `torchaudio`；保留 faster-whisper 为可选组。
+- `writer` / 文章契约强化"基于可能含错的转写做填补与校正"的提示约定。
+
 ## 下一步
 
 1. （可选小迭代）补齐本机 GPU 运行库，验证 large-v3 在 4060/8GB 上的转写质量与速度。
