@@ -306,8 +306,27 @@ GitHub 登录完成后，已创建公共仓库：
 - **CPU 转写性能实测 RTF ≈ 0.17**（约 145 秒语音 24 秒转完），印证"FunASR 在 CPU 也快"的引擎决策。
 - 开发环境：因原 `D:\AI Skill\DY-pullpull` 已不存在，在 `D:\AI Skills\DY PULLPULL\DY-PullPull` 重建检出；复用既有 FunASR venv，补装 yt-dlp / pytest / faster-whisper（备选引擎）。
 
+## 2026-06-16：P2 整理契约与代码就绪（代理 handoff 进行中）
+
+P2 的"AI 整理"后端选定**代理直接做**（Codex/Claude 充当整理器，零成本零安装，符合原项目避开付费 API 的取舍）。代码不能自己调模型，故采用**请求/响应文件契约**——既能让代理现在手动填，也能在 P3 让自动后端（Ollama/API）填同一份契约。
+
+新增 `pullpull/article.py`：
+
+- `RefineRequest` / `RefinedArticle` 数据契约 + `Refiner` 协议（自动后端的接口）。
+- `DEFAULT_INSTRUCTIONS`：整理指令（不改原意、不增删事实，只清洗同音字/英文术语/断句 + 出中文要点总结）。
+- `request_from_collected`、`write_request`/`read_request`、`parse_refined`（响应校验）、`render_article`（总结 + 原文两段）、`finalize`、`finalize_with_refiner`。
+
+`pull.py` 重构：抽出 `collect()`（下载+转写，不落盘），`pull()`（P1）与 P2 的 `request` 流程共用。
+
+CLI 改为子命令：`pull`（P1 原文 md）/ `request`（P2-A：链接 → 转写 → `<id>.request.json`）/ `finalize`（P2-B：request + response → 文章 md）。
+
+进度与验收：
+
+- 单元测试新增 8 个（契约往返、响应校验拒绝缺字段、render 总结在原文之前、finalize、自动后端 `finalize_with_refiner` 用假 refiner）；全套 **60 passed / 2 skipped**，P1 未回归。
+- 真实代理 handoff 演示**进行到一半**：已生成真实视频的 `request.json`（含 855 字转写），**尚未**写 `response.json`、**尚未** `finalize`。
+
 ## 下一步
 
-1. **P2 AI 整理**：对转写原文做清洗纠错（同音字、英文术语、补漏）并生成总结，md 输出"原文 + 总结"两段。
-2. **P3 目标 2（账户批量）**：用 yt-dlp 枚举账户主页全部作品，逐条复用 `pullpull.pull`，加 `index.json` 去重与断点续跑。
+1. **收尾 P2 代理 handoff**：读 `request.json` → 代理写 `response.json`（summary + cleaned_transcript）→ `finalize` 产出文章 md，确认"原文 + 总结"两段成立。
+2. **P3 目标 2（账户批量）**：用 yt-dlp 枚举账户主页全部作品，逐条复用 `collect` + 整理契约，加 `index.json` 去重与断点续跑。
 3. （可选）补齐本机 cuBLAS/cuDNN，让 faster-whisper 备选档在 GPU 上可用。
