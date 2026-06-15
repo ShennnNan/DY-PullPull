@@ -22,6 +22,7 @@ def prepare_article_request(
     workspace: Path,
     video: VideoRef,
     transcript: str,
+    published_at: str | None = None,
 ) -> Path:
     if not transcript.strip():
         raise ValueError("转写文本不能为空")
@@ -35,6 +36,7 @@ def prepare_article_request(
                     "source_url": video.source_url,
                     "title": video.title,
                     "author_name": video.author_name,
+                    "published_at": published_at,
                 },
                 "transcript": transcript,
                 "ocr_text": "",

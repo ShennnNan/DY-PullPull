@@ -1,6 +1,6 @@
 ---
 name: douyin-favorites-to-articles
-description: 将用户本人可访问的抖音收藏或抖音分享链接增量整理为本地 Markdown 文章。用于首次初始化、添加链接、准备文章、校验并发布文章、查看处理状态、重试失败项目或清理临时数据。仅处理用户合法访问的内容；不得绕过登录、验证码、风控或访问控制。
+description: 将用户本人可访问的抖音分享链接增量整理为本地 Markdown 文章。只需给出一条链接，即自动用 yt-dlp 下载视频、faster-whisper 本地转写（GPU 优先、CPU 回退），再生成文章。用于初始化、一键 pull、分步下载/转写、准备文章、校验并发布、查看状态、重试失败或清理临时数据。仅处理用户合法访问的内容；不得绕过登录、验证码、风控或访问控制。
 ---
 
 # 抖音收藏文章提炼
@@ -23,16 +23,30 @@ description: 将用户本人可访问的抖音收藏或抖音分享链接增量�
 
 默认数据保存在 `%LOCALAPPDATA%\DouyinFavoritesToArticles`。除非用户明确指定测试目录，不要把数据写入 Skill 或 Git 仓库。
 
-## v0.1 单链接流程
+## 单链接自动流程（推荐）
 
-1. 使用 `add-url <抖音链接> [--title 标题] [--author 作者]` 注册链接。
-2. v0.1 仅接受已经存在的本地 UTF-8 转写文本。使用 `prepare <video-id> --transcript <文本路径>` 生成 `article-request.json`。
-3. 读取 `article-request.json`。写文章前读取 [references/article-format.md](references/article-format.md)。
-4. 将文章写入同一临时目录的 `article.md`。
-5. 运行 `finalize <video-id> --article <article.md 路径>`。
-6. 只有 CLI 输出 `completed` 后才向用户报告完成。
+用户只需提供一条抖音视频链接。媒体与转写配置见 [references/media.md](references/media.md)。
 
-不要声称 v0.1 已经支持视频下载、Whisper、OCR 或收藏页自动抓取。
+1. 运行 `pull <抖音链接> [--cookies-from-browser <浏览器>]`：自动注册链接、用 yt-dlp 下载媒体、用 faster-whisper 本地转写，生成 `article-request.json`。处理需要登录的内容时，`--cookies-from-browser chrome`（或 edge/firefox）复用用户本人浏览器登录态。
+2. 读取 `article-request.json`。写文章前读取 [references/article-format.md](references/article-format.md)。
+3. 将文章写入同一临时目录的 `article.md`。
+4. 运行 `finalize <video-id> --article <article.md 路径>`。
+5. 只有 CLI 输出 `completed` 后才向用户报告完成。
+
+## 分步命令（失败重试 / 断点续跑）
+
+`pull` 等价于依次执行下列步骤；任一步失败后可单独重跑该步：
+
+1. `add-url <抖音链接> [--title 标题] [--author 作者]`：注册链接。
+2. `fetch <video-id> [--cookies-from-browser <浏览器>]`：下载媒体并回填标题/作者，状态置 `media_prepared`。
+3. `transcribe <video-id> [--model <模型>] [--device <cuda|cpu>]`：本地转写，状态置 `extracted`，并生成 `article-request.json`。CLI 会打印实际使用的设备与模型。
+4. `prepare <video-id> --transcript <文本路径>`：手动覆盖路径，当用户已有现成转写文本、想跳过自动转写时使用。
+
+## 能力边界
+
+- v0.2 已支持：单链接自动下载（yt-dlp）+ 本地语音转写（faster-whisper，GPU 优先、CPU 回退）。
+- v0.2 尚未支持：收藏页/账户的批量自动采集、关键帧与 OCR。不要声称这些已可用。
+- GPU 不可用时会自动回退 CPU，并在输出中注明实际设备。
 
 ## 状态与清理
 

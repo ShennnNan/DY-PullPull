@@ -1,3 +1,5 @@
+import pytest
+
 from dfa.models import VideoRef, VideoStatus
 from dfa.storage import Library
 
@@ -39,3 +41,32 @@ def test_completed_video_has_article_path(tmp_path):
     record = library.get_video("123")
     assert record.status is VideoStatus.COMPLETED
     assert record.article_path == "articles/123-title.md"
+
+
+def test_update_metadata_backfills_title_and_author(tmp_path):
+    library = Library(tmp_path / "library.db")
+    library.add_video(VideoRef("123", "https://www.douyin.com/video/123"))
+
+    library.update_metadata("123", title="真实标题", author_name="真实作者")
+
+    record = library.get_video("123")
+    assert record.title == "真实标题"
+    assert record.author_name == "真实作者"
+    assert record.status is VideoStatus.DISCOVERED  # 不改状态
+
+
+def test_update_metadata_preserves_existing_when_value_is_none(tmp_path):
+    library = Library(tmp_path / "library.db")
+    library.add_video(VideoRef("123", "https://www.douyin.com/video/123", "原标题", "原作者"))
+
+    library.update_metadata("123", title=None, author_name="新作者")
+
+    record = library.get_video("123")
+    assert record.title == "原标题"
+    assert record.author_name == "新作者"
+
+
+def test_update_metadata_unknown_video_raises(tmp_path):
+    library = Library(tmp_path / "library.db")
+    with pytest.raises(KeyError):
+        library.update_metadata("missing", title="x", author_name="y")

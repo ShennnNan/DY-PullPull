@@ -1,4 +1,4 @@
 interface:
   display_name: "抖音收藏文章提炼"
-  short_description: "把个人抖音收藏增量整理为本地 Markdown 文章"
-  default_prompt: "添加一个抖音链接，并根据本地转写材料整理成 Markdown 文章。"
+  short_description: "只给链接即可自动下载并转写为本地 Markdown 文章"
+  default_prompt: "拉取这条抖音链接并整理成本地文章。"
