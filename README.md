@@ -7,21 +7,22 @@ DY-PullPull 是一个 Windows Codex Skill。两个最终目标：
 
 两者都复用同一条单链接管线（下载 → 本地转写 → 整理），差异只在如何枚举出待处理的链接。
 
-计划中的完整流程：
+当前主线流程（轻量可实现路径）：
 
 ```text
-扫码登录
-  -> 增量读取收藏链接
-  -> 临时提取音频与关键帧
-  -> 本地 Whisper / OCR
-  -> Codex 提炼文章
-  -> Markdown + SQLite
-  -> 删除临时媒体
+输入（单链接 / 账户主页 / 公开收藏页）
+  -> 枚举视频 URL 列表
+  -> 逐条：yt-dlp 下载 -> FunASR 本地转写 -> AI 整理（原文清洗 + 总结）
+  -> 保存本地 Markdown（原文 + 总结 + 来源）+ 索引去重
 ```
+
+> 原"扫码登录 + SQLite + OCR + 商业发布"的完整设计已降为备选计划，详见 [docs/PLAN.md](docs/PLAN.md)。
 
 ## 当前状态
 
 项目已完成 **v0.2 Local Media**：Skill 现在只需一条抖音链接，即可自动用 yt-dlp 下载视频、faster-whisper 本地转写（GPU 优先、CPU 回退），生成 Markdown 文章。收藏页/账户批量采集与 OCR（v0.3）尚未开始。
+
+> 2026-06-16 起，项目转向轻量可实现路径，转写主引擎改为 FunASR `paraformer-zh`（faster-whisper 备选），按 P1–P4 推进，详见 [docs/PLAN.md](docs/PLAN.md)。上述 v0.1/v0.2 代码现状仍为 faster-whisper，新路径尚未实施。
 
 已经完成：
 
@@ -42,14 +43,23 @@ DY-PullPull 是一个 Windows Codex Skill。两个最终目标：
 - NVIDIA CUDA 优先，CPU 回退。
 - 原视频、音频和关键帧仅临时使用，成功后删除。
 
-## 开发路线
+## 开发路线（当前主线）
 
-1. **v0.1 Foundation**：链接入库、SQLite 状态、文章契约和临时数据清理。
-2. **v0.2 Local Media**：FFmpeg、`faster-whisper`、CUDA 检测和 CPU 回退。
-3. **v0.3 Favorites Collection**：独立浏览器登录、增量收藏采集、关键帧和 OCR。
-4. **v0.4 Commercial Release**：环境诊断、敏感数据扫描、发布 ZIP 和干净 Windows 验收。
+1. **P1 单条闭环**：链接 → 一份含转写的 Markdown。
+2. **P2 AI 整理**：原文清洗纠错 + 生成总结，两段分别保存。
+3. **P3 账户批量（目标 2）**：yt-dlp 账户枚举 + 批量逐条 + 索引去重、断点续跑。
+4. **P4 公开收藏（目标 1）**：收藏页枚举（先做免登录可行性 spike）。
 
-设计文档：
+文档：
+
+- [当前计划 PLAN.md](docs/PLAN.md)（主线）
+- [工作日志 WORKLOG.md](docs/WORKLOG.md)
+
+已完成的早期成果（v0.1/v0.2）见工作日志。
+
+### 备选计划（原重设计）
+
+原"扫码登录 + SQLite 状态机 + OCR 关键帧 + 环境诊断 + 商业发布 ZIP"的 v0.1–v0.4 完整设计已降为备选，当收藏必须登录或需做成商品时再启用：
 
 - [完整设计](docs/superpowers/specs/2026-06-08-douyin-favorites-codex-skill-design.md)
 - [v0.1 实施计划](docs/superpowers/plans/2026-06-08-douyin-favorites-v0.1-foundation.md)
