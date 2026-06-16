@@ -323,10 +323,11 @@ CLI 改为子命令：`pull`（P1 原文 md）/ `request`（P2-A：链接 → �
 进度与验收：
 
 - 单元测试新增 8 个（契约往返、响应校验拒绝缺字段、render 总结在原文之前、finalize、自动后端 `finalize_with_refiner` 用假 refiner）；全套 **60 passed / 2 skipped**，P1 未回归。
-- 真实代理 handoff 演示**进行到一半**：已生成真实视频的 `request.json`（含 855 字转写），**尚未**写 `response.json`、**尚未** `finalize`。
+- 真实代理 handoff 端到端**已跑通**：`request`（含 855 字转写）→ 代理写 `response.json`（summary + cleaned_transcript）→ `finalize`，产出含 `## 总结` + `## 原文` 两段的文章 md。原文里的 ASR 错误经整理修正（`Open AI`→`OpenAI`、`codex/codes/code is`→`Codex`、`instruct`→`Instructor`、`十三k新`→`13k star`、`prom`→`prompt`、`后歹才能`→`后台` 等），印证"速度优先 + AI 后处理纠错"路线成立。两次转写不一致且无法确证之处（如《三体》/sed）按"不臆造"原则保留。
+
+P2 主线（单条 → 原文 + 总结）至此完成。
 
 ## 下一步
 
-1. **收尾 P2 代理 handoff**：读 `request.json` → 代理写 `response.json`（summary + cleaned_transcript）→ `finalize` 产出文章 md，确认"原文 + 总结"两段成立。
-2. **P3 目标 2（账户批量）**：用 yt-dlp 枚举账户主页全部作品，逐条复用 `collect` + 整理契约，加 `index.json` 去重与断点续跑。
-3. （可选）补齐本机 cuBLAS/cuDNN，让 faster-whisper 备选档在 GPU 上可用。
+1. **P3 目标 2（账户批量）**：用 yt-dlp 枚举账户主页全部作品，逐条复用 `collect` + 整理契约，加 `index.json` 去重与断点续跑；代理或自动后端填 `response`。
+2. （可选）补齐本机 cuBLAS/cuDNN，让 faster-whisper 备选档在 GPU 上可用。
