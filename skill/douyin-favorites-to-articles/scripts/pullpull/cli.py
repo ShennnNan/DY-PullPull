@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
+import re
 
 from pullpull.account import enumerate_account
 from pullpull.article import (
@@ -15,6 +17,31 @@ from pullpull.article import (
 )
 from pullpull.batch import process_account_videos
 from pullpull.pull import collect, pull
+
+
+DEFAULT_ACCOUNT_ROOT = Path(r"D:\AI Skill\content-workspace\samples")
+_INVALID_PATH_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _safe_path_name(value: str) -> str:
+    cleaned = _INVALID_PATH_CHARS.sub("_", value)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip().strip(".")
+    return cleaned or "account"
+
+
+def _account_dir_name(account_url: str, videos) -> str:
+    for video in videos:
+        author = getattr(video, "author", None)
+        if author:
+            return _safe_path_name(str(author))
+    digest = hashlib.sha256(account_url.encode("utf-8")).hexdigest()[:12]
+    return f"account-{digest}"
+
+
+def _resolve_account_out(account_url: str, out: str | None, videos) -> Path:
+    if out:
+        return Path(out)
+    return DEFAULT_ACCOUNT_ROOT / _account_dir_name(account_url, videos)
 
 
 class AgentRefiner:
@@ -56,10 +83,11 @@ def _cmd_request(args) -> int:
 
 
 def _cmd_finalize(args) -> int:
+    mode = ArticleMode(args.mode)
     request = read_request(Path(args.request))
     response = json.loads(Path(args.response).read_text(encoding="utf-8-sig"))
-    refined = parse_refined(response)
-    path = finalize(Path(args.out), request, refined)
+    refined = parse_refined(response, mode=mode)
+    path = finalize(Path(args.out), request, refined, mode=mode)
     print(f"article:  {path}")
     return 0
 
@@ -70,13 +98,15 @@ def _cmd_account(args) -> int:
         args.account_url,
         cookies_from_browser=args.cookies_from_browser,
     )
+    out_dir = _resolve_account_out(args.account_url, args.out, videos)
     result = process_account_videos(
         videos,
-        out_dir=Path(args.out),
+        out_dir=out_dir,
         mode=mode,
         refiner=AgentRefiner(),
         cookies_from_browser=args.cookies_from_browser,
     )
+    print(f"out: {out_dir}")
     print(f"total: {result.total}")
     print(f"completed: {result.completed}")
     print(f"skipped: {result.skipped}")
@@ -105,6 +135,12 @@ def main(argv=None) -> int:
     p_fin = sub.add_parser("finalize", help="P2-B：整理请求 + 响应 → 文章 md（原文 + 总结）")
     p_fin.add_argument("request", help="<id>.request.json 路径")
     p_fin.add_argument("response", help="<id>.response.json 路径（summary + cleaned_transcript）")
+    p_fin.add_argument(
+        "--mode",
+        choices=[mode.value for mode in ArticleMode],
+        default=ArticleMode.SUMMARY.value,
+        help="transcript=顺畅原文；summary=核心观点+顺畅原文",
+    )
     p_fin.add_argument("--out", default="./articles", help="输出目录（默认 ./articles）")
     p_fin.set_defaults(func=_cmd_finalize)
 
@@ -116,7 +152,11 @@ def main(argv=None) -> int:
         default=ArticleMode.TRANSCRIPT.value,
         help="transcript=顺畅原文；summary=核心观点+顺畅原文",
     )
-    p_account.add_argument("--out", default="./articles", help="输出目录（默认 ./articles）")
+    p_account.add_argument(
+        "--out",
+        default=None,
+        help=r"输出目录（默认 D:\AI Skill\content-workspace\samples\<账号名>）",
+    )
     p_account.add_argument(
         "--cookies-from-browser",
         default=None,

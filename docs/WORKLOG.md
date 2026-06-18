@@ -391,3 +391,22 @@ P2 主线（单条 → 原文 + 总结）至此完成。
 2. **登录态输入增强**：支持 `--cookies <cookies.txt>` 或更稳定的 cookies 导入路径，绕开浏览器数据库锁和 DPAPI 问题。
 3. **真实账号验收**：拿一个目标账号主页实测 yt-dlp 账户枚举，验证分页、去重、断点续跑和失败记录。
 4. （可选）补齐本机 cuBLAS/cuDNN，让 faster-whisper 备选档在 GPU 上可用。
+
+## 2026-06-18：本地试验手册与默认存放目录
+
+为便于用户直接在本机试验账号批量流程，补齐了本地操作说明和 CLI 默认路径规则。
+
+本轮实现：
+
+- `pullpull_cli.py account` 在省略 `--out` 时默认写入 `D:\AI Skill\content-workspace\samples\<账号名>`。
+- 若账号枚举结果没有作者名，则使用 `account-<12位hash>` 作为稳定兜底目录。
+- 账号批量命令现在会打印实际 `out:` 目录，方便试跑时确认文件落点。
+- `finalize` 新增 `--mode transcript|summary`，手动整理单条 request 时也能选择“只要顺畅原文”或“核心观点 + 顺畅原文”。
+- 新增本地使用手册：`docs/customer/local-usage.md`。
+- README 和 Skill 说明同步了默认目录、`finalize --mode` 和本地手册入口。
+
+验证：
+
+- 新增回归测试覆盖账号默认目录、无作者兜底目录、`finalize --mode transcript`。
+- 完整 `pytest -q` 通过，仅真实下载集成测试按环境跳过。
+- `pullpull_cli.py account --help` 与 `pullpull_cli.py finalize --help` 正常展示新参数。

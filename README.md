@@ -59,6 +59,7 @@ DY-PullPull 是一个 Windows Codex Skill。两个最终目标：
 
 - [当前计划 PLAN.md](docs/PLAN.md)（主线）
 - [工作日志 WORKLOG.md](docs/WORKLOG.md)
+- [本地使用手册](docs/customer/local-usage.md)
 
 已完成的早期成果（v0.1/v0.2）见工作日志。
 
@@ -74,17 +75,17 @@ DY-PullPull 是一个 Windows Codex Skill。两个最终目标：
 
 ```powershell
 & $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" request <抖音视频链接> --out ./articles
-& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" finalize <id>.request.json <id>.response.json --out ./articles
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" finalize <id>.request.json <id>.response.json --mode summary --out ./articles
 ```
 
-生成整理请求 JSON，再用代理或后端写响应 JSON，最终输出含核心观点和清洗原文的文章。
+生成整理请求 JSON，再用代理或后端写响应 JSON。`--mode transcript` 只输出清洗原文；`--mode summary` 输出核心观点和清洗原文。
 
 ```powershell
-& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <抖音账号主页URL> --mode transcript --out ./articles
-& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <抖音账号主页URL> --mode summary --out ./articles
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <抖音账号主页URL> --mode transcript
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <抖音账号主页URL> --mode summary
 ```
 
-枚举账号主页视频并批量处理。`transcript` 产出 AI 清洗后的顺畅原文；`summary` 额外产出核心观点。当前批量命令需要接入自动 `Refiner` 后端后才能直接产出最终文章，否则会明确失败。
+枚举账号主页视频并批量处理。默认写入 `D:\AI Skill\content-workspace\samples\<账号名>`，也可以用 `--out` 指定目录。`transcript` 产出 AI 清洗后的顺畅原文；`summary` 额外产出核心观点。当前批量命令需要接入自动 `Refiner` 后端后才能直接产出最终文章，否则会明确失败。
 
 ### 备选计划（原重设计）
 

@@ -1,4 +1,6 @@
+import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -172,3 +174,127 @@ def test_pullpull_account_command_enumerates_and_processes(
     output = capsys.readouterr().out
     assert "total: 2" in output
     assert "completed: 2" in output
+
+
+def test_pullpull_account_command_uses_author_default_output(monkeypatch, capsys):
+    from pullpull.account import AccountVideo
+    from pullpull.batch import BatchResult
+    import pullpull.cli as cli_module
+
+    calls = {}
+
+    def fake_enumerate(account_url, *, cookies_from_browser=None):
+        return [
+            AccountVideo(
+                video_id="111",
+                source_url="https://www.douyin.com/video/111",
+                author="李海涛（直男）",
+            )
+        ]
+
+    def fake_process(
+        videos,
+        *,
+        out_dir,
+        mode,
+        refiner,
+        collector=None,
+        cookies_from_browser=None,
+    ):
+        calls["out_dir"] = out_dir
+        return BatchResult(total=1, completed=1, skipped=0, failed=0)
+
+    monkeypatch.setattr(cli_module, "enumerate_account", fake_enumerate)
+    monkeypatch.setattr(cli_module, "process_account_videos", fake_process)
+
+    result = cli_module.main(["account", "https://www.douyin.com/user/MS4wLjAB"])
+
+    assert result == 0
+    assert calls["out_dir"] == Path(
+        r"D:\AI Skill\content-workspace\samples\李海涛（直男）"
+    )
+    output = capsys.readouterr().out
+    assert "out:" in output
+
+
+def test_pullpull_account_command_uses_url_hash_when_author_missing(
+    monkeypatch, capsys
+):
+    from pullpull.batch import BatchResult
+    import pullpull.cli as cli_module
+
+    account_url = "https://www.douyin.com/user/no-author"
+    calls = {}
+
+    def fake_enumerate(account_url, *, cookies_from_browser=None):
+        return []
+
+    def fake_process(
+        videos,
+        *,
+        out_dir,
+        mode,
+        refiner,
+        collector=None,
+        cookies_from_browser=None,
+    ):
+        calls["out_dir"] = out_dir
+        return BatchResult(total=0, completed=0, skipped=0, failed=0)
+
+    monkeypatch.setattr(cli_module, "enumerate_account", fake_enumerate)
+    monkeypatch.setattr(cli_module, "process_account_videos", fake_process)
+
+    result = cli_module.main(["account", account_url])
+
+    digest = hashlib.sha256(account_url.encode("utf-8")).hexdigest()[:12]
+    assert result == 0
+    assert calls["out_dir"] == Path(
+        rf"D:\AI Skill\content-workspace\samples\account-{digest}"
+    )
+    output = capsys.readouterr().out
+    assert "out:" in output
+
+
+def test_pullpull_finalize_supports_transcript_mode(tmp_path):
+    import pullpull.cli as cli_module
+
+    request_path = tmp_path / "123.request.json"
+    response_path = tmp_path / "123.response.json"
+    out_dir = tmp_path / "articles"
+    request_path.write_text(
+        json.dumps(
+            {
+                "video_id": "123",
+                "title": "Test title",
+                "source_url": "https://www.douyin.com/video/123",
+                "author": "Tester",
+                "published_at": "20260618",
+                "raw_transcript": "raw text",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    response_path.write_text(
+        json.dumps({"cleaned_transcript": "cleaned text"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    result = cli_module.main(
+        [
+            "finalize",
+            str(request_path),
+            str(response_path),
+            "--mode",
+            "transcript",
+            "--out",
+            str(out_dir),
+        ]
+    )
+
+    article = (out_dir / "123.md").read_text(encoding="utf-8")
+    assert result == 0
+    assert "mode: transcript" in article
+    assert "## 原文" in article
+    assert "cleaned text" in article
+    assert "## 核心观点" not in article

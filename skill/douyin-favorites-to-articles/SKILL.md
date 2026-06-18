@@ -45,10 +45,18 @@ description: 将用户本人可访问的抖音分享链接增量整理为本地 
 - `transcript`：ASR 后用 AI 清洗错字、错句和断句，最终文章只输出 `## 原文`。
 - `summary`：在 `transcript` 基础上总结核心观点，最终文章输出 `## 核心观点` 和 `## 原文`。
 - 默认模式是 `transcript`。
+- 默认输出到 `D:\AI Skill\content-workspace\samples\<账号名>`；需要自定义目录时加 `--out <目录>`。
 - 批量任务会写 `index.json` 用于去重和断点续跑。
 - 需要登录态时使用 `--cookies-from-browser chrome`，只处理用户本人合法可访问的内容。
 
 当前 CLI 已保留 AI Refiner 边界。若未连接自动 AI 后端，批量流程会明确失败，不会把未经 AI 清洗的 ASR 原文伪装成最终文章。
+
+手动整理单条 request 时，`finalize` 也支持同样的模式：
+
+```powershell
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" finalize <id>.request.json <id>.response.json --mode transcript
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" finalize <id>.request.json <id>.response.json --mode summary
+```
 
 ## 分步命令（失败重试 / 断点续跑）
 
