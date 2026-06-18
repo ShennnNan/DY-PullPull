@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
 from pullpull.pull import Collected
 
 ENGINE_NAME = "funasr-paraformer-zh"
+
+
+class ArticleMode(StrEnum):
+    TRANSCRIPT = "transcript"
+    SUMMARY = "summary"
 
 # 交给 AI（代理或自动后端）的整理指令。约束：不改原意、不增删事实，只清洗与总结。
 DEFAULT_INSTRUCTIONS = (
@@ -33,7 +39,7 @@ class RefineRequest:
 
 @dataclass(frozen=True)
 class RefinedArticle:
-    summary: str
+    summary: str | None
     cleaned_transcript: str
 
 
@@ -69,19 +75,30 @@ def read_request(path: Path) -> RefineRequest:
     return RefineRequest(**data)
 
 
-def parse_refined(data: dict) -> RefinedArticle:
-    """从响应 JSON 解析并校验：summary 与 cleaned_transcript 必须非空。"""
-    summary = str(data.get("summary", "")).strip()
+def parse_refined(
+    data: dict, *, mode: ArticleMode = ArticleMode.SUMMARY
+) -> RefinedArticle:
+    """从响应 JSON 解析并校验对应模式的必填字段。"""
     cleaned = str(data.get("cleaned_transcript", "")).strip()
-    if not summary:
-        raise ValueError("响应缺少 summary")
     if not cleaned:
         raise ValueError("响应缺少 cleaned_transcript")
+
+    if mode is ArticleMode.TRANSCRIPT:
+        return RefinedArticle(summary=None, cleaned_transcript=cleaned)
+
+    summary = str(data.get("core_viewpoints") or data.get("summary") or "").strip()
+    if not summary:
+        raise ValueError("响应缺少 core_viewpoints")
     return RefinedArticle(summary=summary, cleaned_transcript=cleaned)
 
 
-def render_article(*, request: RefineRequest, refined: RefinedArticle) -> str:
-    """渲染最终文章 Markdown：来源 frontmatter + 标题 + 总结 + 原文（已清洗）。"""
+def render_article(
+    *,
+    request: RefineRequest,
+    refined: RefinedArticle,
+    mode: ArticleMode = ArticleMode.SUMMARY,
+) -> str:
+    """渲染最终文章 Markdown：来源 frontmatter + 模式化正文。"""
     title = request.title or request.video_id
     lines = [
         "---",
@@ -91,35 +108,43 @@ def render_article(*, request: RefineRequest, refined: RefinedArticle) -> str:
         f"author: {request.author or ''}",
         f"published_at: {request.published_at or ''}",
         f"engine: {ENGINE_NAME}",
+        f"mode: {mode.value}",
         "refined_by: agent",
         "---",
         "",
         f"# {title}",
         "",
-        "## 总结",
-        "",
-        refined.summary,
-        "",
-        "## 原文",
-        "",
-        refined.cleaned_transcript,
-        "",
     ]
+    if mode is ArticleMode.SUMMARY:
+        if not refined.summary:
+            raise ValueError("summary mode requires core viewpoints")
+        lines.extend(["## 核心观点", "", refined.summary, ""])
+    lines.extend(["## 原文", "", refined.cleaned_transcript, ""])
     return "\n".join(lines)
 
 
-def finalize(out_dir: Path | str, request: RefineRequest, refined: RefinedArticle) -> Path:
+def finalize(
+    out_dir: Path | str,
+    request: RefineRequest,
+    refined: RefinedArticle,
+    *,
+    mode: ArticleMode = ArticleMode.SUMMARY,
+) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     article_path = out_dir / f"{request.video_id}.md"
     article_path.write_text(
-        render_article(request=request, refined=refined), encoding="utf-8"
+        render_article(request=request, refined=refined, mode=mode), encoding="utf-8"
     )
     return article_path
 
 
 def finalize_with_refiner(
-    out_dir: Path | str, request: RefineRequest, refiner: Refiner
+    out_dir: Path | str,
+    request: RefineRequest,
+    refiner: Refiner,
+    *,
+    mode: ArticleMode = ArticleMode.SUMMARY,
 ) -> Path:
     """自动后端路径（P3 复用）：调用 refiner 产出整理结果再落盘。"""
-    return finalize(out_dir, request, refiner.refine(request))
+    return finalize(out_dir, request, refiner.refine(request), mode=mode)

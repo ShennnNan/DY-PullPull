@@ -5,6 +5,7 @@ import pytest
 
 from dfa.media import MediaResult
 from pullpull.article import (
+    ArticleMode,
     RefinedArticle,
     RefineRequest,
     finalize,
@@ -60,31 +61,79 @@ def test_parse_refined_valid():
     assert refined == RefinedArticle("要点", "清洗后的原文")
 
 
+def test_parse_transcript_refined_accepts_cleaned_only():
+    refined = parse_refined(
+        {"cleaned_transcript": "清洗后的顺畅原文"},
+        mode=ArticleMode.TRANSCRIPT,
+    )
+
+    assert refined.summary is None
+    assert refined.cleaned_transcript == "清洗后的顺畅原文"
+
+
+def test_parse_summary_refined_accepts_core_viewpoints():
+    refined = parse_refined(
+        {"core_viewpoints": "第一，核心观点。第二，结论。", "cleaned_transcript": "顺畅原文"},
+        mode=ArticleMode.SUMMARY,
+    )
+
+    assert refined.summary == "第一，核心观点。第二，结论。"
+    assert refined.cleaned_transcript == "顺畅原文"
+
+
+def test_parse_summary_refined_accepts_legacy_summary_key():
+    refined = parse_refined(
+        {"summary": "旧字段总结", "cleaned_transcript": "顺畅原文"},
+        mode=ArticleMode.SUMMARY,
+    )
+
+    assert refined.summary == "旧字段总结"
+    assert refined.cleaned_transcript == "顺畅原文"
+
+
 @pytest.mark.parametrize(
-    "payload",
+    "payload, mode",
     [
-        {"cleaned_transcript": "只有原文"},
-        {"summary": "只有总结"},
-        {"summary": "  ", "cleaned_transcript": "x"},
-        {},
+        ({}, ArticleMode.TRANSCRIPT),
+        ({"cleaned_transcript": "  "}, ArticleMode.TRANSCRIPT),
+        ({"cleaned_transcript": "只有原文"}, ArticleMode.SUMMARY),
+        ({"summary": "只有总结"}, ArticleMode.SUMMARY),
+        ({"core_viewpoints": "只有观点"}, ArticleMode.SUMMARY),
+        ({"summary": "  ", "cleaned_transcript": "x"}, ArticleMode.SUMMARY),
     ],
 )
-def test_parse_refined_rejects_incomplete(payload):
+def test_parse_refined_rejects_incomplete(payload, mode):
     with pytest.raises(ValueError):
-        parse_refined(payload)
+        parse_refined(payload, mode=mode)
 
 
-def test_render_article_has_summary_then_transcript():
+def test_render_transcript_article_has_only_cleaned_transcript():
     md = render_article(
         request=_request(),
-        refined=RefinedArticle("这是总结", "这是清洗后的原文"),
+        refined=RefinedArticle(None, "这是清洗后的原文"),
+        mode=ArticleMode.TRANSCRIPT,
     )
-    assert "## 总结" in md
+
+    assert "## 核心观点" not in md
+    assert "## 总结" not in md
     assert "## 原文" in md
-    assert md.index("## 总结") < md.index("## 原文")
-    assert "这是总结" in md
     assert "这是清洗后的原文" in md
+    assert "mode: transcript" in md
     assert "video_id: 123" in md
+
+
+def test_render_summary_article_has_core_viewpoints_then_transcript():
+    md = render_article(
+        request=_request(),
+        refined=RefinedArticle("这是核心观点", "这是清洗后的原文"),
+        mode=ArticleMode.SUMMARY,
+    )
+    assert "## 核心观点" in md
+    assert "## 原文" in md
+    assert md.index("## 核心观点") < md.index("## 原文")
+    assert "这是核心观点" in md
+    assert "这是清洗后的原文" in md
+    assert "mode: summary" in md
     assert "refined_by: agent" in md
 
 
