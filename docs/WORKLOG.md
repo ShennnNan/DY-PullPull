@@ -327,7 +327,67 @@ CLI 改为子命令：`pull`（P1 原文 md）/ `request`（P2-A：链接 → �
 
 P2 主线（单条 → 原文 + 总结）至此完成。
 
+## 2026-06-18：账户任务模式设计与 P3 基础能力完成
+
+围绕"获取一个抖音账号旗下所有视频 + 原稿文字转写"重新明确了批量任务模式：
+
+1. **`transcript`**：ASR 后必须经过 AI 清洗错字、错句和断句，最终输出顺畅原文。
+2. **`summary`**：在顺畅原文基础上，再总结核心观点，输出 `## 核心观点` + `## 原文`。
+
+设计与计划文档：
+
+- `docs/superpowers/specs/2026-06-18-account-task-modes-design.md`
+- `docs/superpowers/plans/2026-06-18-account-task-modes.md`
+
+实现分支：`codex/task-transcript-list`。
+
+本轮实现：
+
+- `pullpull.article` 新增 `ArticleMode`，支持 `transcript` / `summary` 两种文章渲染和响应校验。
+- 新增 `pullpull.account`：通过可注入的 yt-dlp runner 枚举账号主页视频，归一化视频 URL、去重、传递浏览器 cookies 参数。
+- 新增 `pullpull.batch`：逐条复用 `collect` + `Refiner` + `finalize`，维护 `index.json`，支持同模式跳过、断点续跑、单条失败不中断。
+- `pullpull.cli` 新增 `account <账号主页URL> --mode transcript|summary --out ... --cookies-from-browser ...`。
+- `pullpull.transcribe` 增强媒体解码：无系统 FFmpeg 时，用 PyAV 将下载的视频音频转为 16k WAV，再交给 FunASR，解决 Windows 上 FunASR 无法直接读取 mp4 的问题。
+- `SKILL.md` 更新账号批量流程说明。
+
+重要边界：
+
+- 批量流程已经强制走 `Refiner` 协议，确保最终文章必须经 AI 清洗。
+- 当前默认 CLI 还没有接入自动 AI 后端；若直接运行批量命令，会明确失败，而不会把未经清洗的 ASR 文本伪装成最终产物。
+- 下一步需接入 OpenAI / 本地模型 / Codex 代理文件流中的一种，作为自动 `Refiner`。
+
+验证：
+
+- 新增/更新测试覆盖文章模式、账号枚举、批量索引、CLI 参数编排。
+- 完整测试套件通过：`pytest -q`，仅真实下载集成测试按环境跳过。
+- `pullpull_cli.py account --help` 正常展示 `--mode {transcript,summary}`。
+
+## 2026-06-18：李海涛（直男）对标转写任务实跑
+
+任务文件：
+
+- `D:\iCloudDrive\iCloud~md~obsidian\抖音拍摄\DeepLove\对标转写任务_李海涛.md`
+
+输出目录：
+
+- `D:\AI Skill\content-workspace\samples\李海涛（直男）`
+
+处理结果：
+
+- 清单共 48 条。
+- 45 条公开视频已用 yt-dlp + FunASR 真实转写并写入对应 `transcript.md`。
+- 3 条经用户确认是文案内容、没有可转写的视频口播，已在本地对应 `transcript.md` 备注为"本条为文案内容，没有可转写的视频口播"。
+- `batch_status.json` 已更新：`failed` 清空，3 条移入 `no_video`。
+
+实跑中发现的问题：
+
+- 部分抖音链接需要 fresh cookies。
+- Windows 上 yt-dlp 读取 Chrome / Edge cookies 可能遇到 cookie 数据库锁或 DPAPI 解密失败；可用 `cookies.txt` 作为后续更稳的登录态输入方案。
+- 本次 3 条最终由用户确认无视频，因此不再补抓。
+
 ## 下一步
 
-1. **P3 目标 2（账户批量）**：用 yt-dlp 枚举账户主页全部作品，逐条复用 `collect` + 整理契约，加 `index.json` 去重与断点续跑；代理或自动后端填 `response`。
-2. （可选）补齐本机 cuBLAS/cuDNN，让 faster-whisper 备选档在 GPU 上可用。
+1. **接入自动 Refiner**：让 `account --mode transcript|summary` 能直接调用 OpenAI / 本地模型 / Codex 代理文件流完成清洗与总结。
+2. **登录态输入增强**：支持 `--cookies <cookies.txt>` 或更稳定的 cookies 导入路径，绕开浏览器数据库锁和 DPAPI 问题。
+3. **真实账号验收**：拿一个目标账号主页实测 yt-dlp 账户枚举，验证分页、去重、断点续跑和失败记录。
+4. （可选）补齐本机 cuBLAS/cuDNN，让 faster-whisper 备选档在 GPU 上可用。
