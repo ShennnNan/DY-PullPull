@@ -33,6 +33,23 @@ description: 将用户本人可访问的抖音分享链接增量整理为本地 
 4. 运行 `finalize <video-id> --article <article.md 路径>`。
 5. 只有 CLI 输出 `completed` 后才向用户报告完成。
 
+## 账号批量流程
+
+账号批量用于处理某个抖音账号下可枚举的视频：
+
+```powershell
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <账号主页URL> --mode transcript
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <账号主页URL> --mode summary
+```
+
+- `transcript`：ASR 后用 AI 清洗错字、错句和断句，最终文章只输出 `## 原文`。
+- `summary`：在 `transcript` 基础上总结核心观点，最终文章输出 `## 核心观点` 和 `## 原文`。
+- 默认模式是 `transcript`。
+- 批量任务会写 `index.json` 用于去重和断点续跑。
+- 需要登录态时使用 `--cookies-from-browser chrome`，只处理用户本人合法可访问的内容。
+
+当前 CLI 已保留 AI Refiner 边界。若未连接自动 AI 后端，批量流程会明确失败，不会把未经 AI 清洗的 ASR 原文伪装成最终文章。
+
 ## 分步命令（失败重试 / 断点续跑）
 
 `pull` 等价于依次执行下列步骤；任一步失败后可单独重跑该步：

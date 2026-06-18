@@ -20,16 +20,21 @@ DY-PullPull 是一个 Windows Codex Skill。两个最终目标：
 
 ## 当前状态
 
-项目已完成 **v0.2 Local Media**：Skill 现在只需一条抖音链接，即可自动用 yt-dlp 下载视频、faster-whisper 本地转写（GPU 优先、CPU 回退），生成 Markdown 文章。收藏页/账户批量采集与 OCR（v0.3）尚未开始。
+项目当前主线已经从早期重设计切换为 **轻量可实现路径**：
 
-> 2026-06-16 起，项目转向轻量可实现路径，转写主引擎改为 FunASR `paraformer-zh`（faster-whisper 备选），按 P1–P4 推进，详见 [docs/PLAN.md](docs/PLAN.md)。上述 v0.1/v0.2 代码现状仍为 faster-whisper，新路径尚未实施。
+- **P1 单条闭环已完成**：一条抖音视频链接可以自动经 `yt-dlp` 下载、FunASR `paraformer-zh` 本地转写，并生成含 `## 原文` 的 Markdown。
+- **P2 AI 整理契约已完成**：`request` / `finalize` 流程支持把原始转写交给代理或后端清洗，生成 `## 核心观点` + `## 原文`。
+- **P3 账户批量基础已完成**：已新增账号主页枚举、批量 runner、`index.json` 去重与断点续跑、`transcript` / `summary` 两种任务模式。
+- **媒体兼容性已增强**：无系统 FFmpeg 时，会用 PyAV 将视频音频转为 16k WAV 再交给 FunASR。
 
-已经完成：
+当前仍未完成的是自动 AI 后端接入：账号批量流程已经强制走 `Refiner` 接口，但默认 CLI 只保留明确失败边界，避免把未经 AI 清洗的 ASR 原文伪装成最终文章。
+
+已经完成的主要模块：
 
 - 明确产品目标、用户范围与隐私边界。
-- 完成总体架构、模块、数据流和测试设计。
 - 完成 v0.1 Foundation：Skill 骨架、URL 规范化、SQLite 状态机、临时工作区、文章契约与 CLI 闭环。
-- 完成 v0.2 Local Media：一键 `pull` 自动下载（yt-dlp）+ 本地语音转写（faster-whisper，CUDA→CPU 回退），元数据自动回填，端到端验证产出文章。
+- 完成 v0.2 Local Media：`yt-dlp` 下载、媒体元数据回填、本地 ASR 转写、端到端文章产出。
+- 完成轻量 `pullpull` 主线：FunASR 单条闭环、AI 整理契约、账号枚举与批处理基础。
 
 详细进展见 [工作日志](docs/WORKLOG.md)。
 
@@ -56,6 +61,30 @@ DY-PullPull 是一个 Windows Codex Skill。两个最终目标：
 - [工作日志 WORKLOG.md](docs/WORKLOG.md)
 
 已完成的早期成果（v0.1/v0.2）见工作日志。
+
+## 当前可用命令
+
+在 Skill 根目录下使用：
+
+```powershell
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" pull <抖音视频链接> --out ./articles
+```
+
+生成一份含原始 FunASR 转写的 Markdown。
+
+```powershell
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" request <抖音视频链接> --out ./articles
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" finalize <id>.request.json <id>.response.json --out ./articles
+```
+
+生成整理请求 JSON，再用代理或后端写响应 JSON，最终输出含核心观点和清洗原文的文章。
+
+```powershell
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <抖音账号主页URL> --mode transcript --out ./articles
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <抖音账号主页URL> --mode summary --out ./articles
+```
+
+枚举账号主页视频并批量处理。`transcript` 产出 AI 清洗后的顺畅原文；`summary` 额外产出核心观点。当前批量命令需要接入自动 `Refiner` 后端后才能直接产出最终文章，否则会明确失败。
 
 ### 备选计划（原重设计）
 

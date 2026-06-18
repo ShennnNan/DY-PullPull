@@ -110,3 +110,65 @@ def test_transcribe_failure_records_failure(tmp_path, monkeypatch, fake_pipeline
     assert result == 2
     assert record.status is VideoStatus.FAILED
     assert record.failed_stage == "transcription"
+
+
+def test_pullpull_account_command_enumerates_and_processes(
+    monkeypatch, tmp_path, capsys
+):
+    from pullpull.article import ArticleMode
+    from pullpull.batch import BatchResult
+    import pullpull.cli as cli_module
+
+    calls = {}
+
+    def fake_enumerate(account_url, *, cookies_from_browser=None):
+        calls["account_url"] = account_url
+        calls["cookies"] = cookies_from_browser
+        return ["video-a", "video-b"]
+
+    class FakeRefiner:
+        def refine(self, request):
+            raise AssertionError("batch fake should receive refiner but not call it")
+
+    def fake_process(
+        videos,
+        *,
+        out_dir,
+        mode,
+        refiner,
+        collector=None,
+        cookies_from_browser=None,
+    ):
+        calls["videos"] = videos
+        calls["out_dir"] = out_dir
+        calls["mode"] = mode
+        calls["batch_cookies"] = cookies_from_browser
+        calls["refiner_type"] = type(refiner).__name__
+        return BatchResult(total=2, completed=2, skipped=0, failed=0)
+
+    monkeypatch.setattr(cli_module, "enumerate_account", fake_enumerate)
+    monkeypatch.setattr(cli_module, "AgentRefiner", FakeRefiner)
+    monkeypatch.setattr(cli_module, "process_account_videos", fake_process)
+
+    result = cli_module.main(
+        [
+            "account",
+            "https://www.douyin.com/user/MS4wLjAB",
+            "--mode",
+            "summary",
+            "--out",
+            str(tmp_path),
+            "--cookies-from-browser",
+            "chrome",
+        ]
+    )
+
+    assert result == 0
+    assert calls["mode"] is ArticleMode.SUMMARY
+    assert calls["cookies"] == "chrome"
+    assert calls["batch_cookies"] == "chrome"
+    assert calls["videos"] == ["video-a", "video-b"]
+    assert calls["out_dir"] == tmp_path
+    output = capsys.readouterr().out
+    assert "total: 2" in output
+    assert "completed: 2" in output
