@@ -4,14 +4,31 @@ import argparse
 import json
 from pathlib import Path
 
+from pullpull.account import enumerate_account
 from pullpull.article import (
+    ArticleMode,
     finalize,
     parse_refined,
     read_request,
     request_from_collected,
     write_request,
 )
+from pullpull.batch import process_account_videos
 from pullpull.pull import collect, pull
+
+
+class AgentRefiner:
+    """Explicit boundary for Codex/agent refinement during batch runs.
+
+    Batch logic must call a Refiner and must fail loudly when no AI cleanup
+    backend is connected, because raw ASR text is not a valid final article.
+    """
+
+    def refine(self, request):
+        raise RuntimeError(
+            "AI refinement backend is not connected. Use request/finalize flow "
+            "or provide an automatic Refiner."
+        )
 
 
 def _cmd_pull(args) -> int:
@@ -47,6 +64,26 @@ def _cmd_finalize(args) -> int:
     return 0
 
 
+def _cmd_account(args) -> int:
+    mode = ArticleMode(args.mode)
+    videos = enumerate_account(
+        args.account_url,
+        cookies_from_browser=args.cookies_from_browser,
+    )
+    result = process_account_videos(
+        videos,
+        out_dir=Path(args.out),
+        mode=mode,
+        refiner=AgentRefiner(),
+        cookies_from_browser=args.cookies_from_browser,
+    )
+    print(f"total: {result.total}")
+    print(f"completed: {result.completed}")
+    print(f"skipped: {result.skipped}")
+    print(f"failed: {result.failed}")
+    return 0 if result.failed == 0 else 2
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="pullpull：抖音链接 → 下载 → FunASR 转写 → AI 整理（原文 + 总结）",
@@ -70,6 +107,22 @@ def main(argv=None) -> int:
     p_fin.add_argument("response", help="<id>.response.json 路径（summary + cleaned_transcript）")
     p_fin.add_argument("--out", default="./articles", help="输出目录（默认 ./articles）")
     p_fin.set_defaults(func=_cmd_finalize)
+
+    p_account = sub.add_parser("account", help="账号主页 → 批量处理视频")
+    p_account.add_argument("account_url", help="抖音账号主页链接")
+    p_account.add_argument(
+        "--mode",
+        choices=[mode.value for mode in ArticleMode],
+        default=ArticleMode.TRANSCRIPT.value,
+        help="transcript=顺畅原文；summary=核心观点+顺畅原文",
+    )
+    p_account.add_argument("--out", default="./articles", help="输出目录（默认 ./articles）")
+    p_account.add_argument(
+        "--cookies-from-browser",
+        default=None,
+        help="复用浏览器登录态，如 chrome / edge",
+    )
+    p_account.set_defaults(func=_cmd_account)
 
     args = parser.parse_args(argv)
     return args.func(args)
