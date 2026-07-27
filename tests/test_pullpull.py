@@ -65,7 +65,7 @@ def test_pull_downloads_transcribes_and_writes_markdown(tmp_path):
     assert isinstance(result, PullResult)
     assert result.video_id == "123"
     assert result.title == "标题"
-    md_path = out_dir / "123.md"
+    md_path = out_dir / "标题.md"
     assert md_path.exists()
     body = md_path.read_text(encoding="utf-8")
     assert "这是转写结果" in body

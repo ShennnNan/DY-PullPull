@@ -48,6 +48,19 @@ def test_build_options_adds_cookies_from_browser(tmp_path):
     assert options["cookiesfrombrowser"] == ("chrome",)
 
 
+def test_build_options_accepts_browser_profile_path(tmp_path):
+    options = build_options(
+        tmp_path,
+        "7",
+        r"edge:D:\AI Skill\content-workspace\.auth",
+    )
+
+    assert options["cookiesfrombrowser"] == (
+        "edge",
+        r"D:\AI Skill\content-workspace\.auth",
+    )
+
+
 def test_download_returns_media_path_and_metadata(tmp_path):
     runner = FakeRunner(writes={"7.mp4": "binary", "7.info.json": _info_json()})
 

@@ -410,3 +410,24 @@ P2 主线（单条 → 原文 + 总结）至此完成。
 - 新增回归测试覆盖账号默认目录、无作者兜底目录、`finalize --mode transcript`。
 - 完整 `pytest -q` 通过，仅真实下载集成测试按环境跳过。
 - `pullpull_cli.py account --help` 与 `pullpull_cli.py finalize --help` 正常展示新参数。
+
+## 2026-07-27：账户作品归档全链路真实验收
+
+使用一个公开抖音账户完成“枚举 → 下载 → 转写 → AI 清洗总结 → 本地 Markdown”的真实全量验收。
+
+实现与修复：
+
+- yt-dlp 继续负责单视频元数据与媒体下载；账户主页 URL 不受当前提取器支持时，允许 Codex 从用户现有浏览器会话生成 `account-manifest.json`。
+- 清单同时记录 `declared_count` 与 `accessible_count`，不把页面计数当成已归档数量。
+- 新增 `account-prepare` 两阶段准备、样本 `--limit`、`account-refine` 自动 DeepSeek JSON 整理、`account-finalize` 和逐阶段失败记录。
+- `--cookies-from-browser` 支持 `browser:profile-path`，可复用未锁定的专用浏览器配置目录。
+- FunASR 模型在同一批次跨视频复用，避免每条视频重复加载模型。
+- 最终 Markdown 改为 `<视频标题>.md`；Windows 非法标点转为等义全角字符，同名作品用序号防止覆盖。
+- 新增 `account-rename-articles`，把旧 `<video_id>.md` 安全迁移为标题文件名并同步 `index.json`。
+
+真实验收结果：
+
+- 账户页面显示 13 条作品，滚动到底实际可访问 12 条，差额 1 条记录在清单中。
+- 12 条均完成下载、FunASR 转写、AI 清洗总结和 Markdown 定稿，0 失败。
+- 12 篇均含视频来源、发布日期、核心观点和完整原文；清洗后原文长度为 ASR 原文的 0.96–1.02 倍。
+- 临时音视频全部清除，归档目录只保留文章、清单、索引和可复核的 request/response JSON。

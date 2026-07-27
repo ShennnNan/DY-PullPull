@@ -1,4 +1,4 @@
 interface:
-  display_name: "抖音收藏文章提炼"
-  short_description: "只给链接即可自动下载并转写为本地 Markdown 文章"
-  default_prompt: "拉取这条抖音链接并整理成本地文章。"
+  display_name: "抖音账户内容归档"
+  short_description: "批量枚举、转写和归档抖音账户作品，保存完整原文与核心总结"
+  default_prompt: "Use $douyin-favorites-to-articles to archive this Douyin account into local Markdown transcripts and summaries."

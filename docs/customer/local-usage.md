@@ -39,84 +39,77 @@ skipped: ...
 failed: ...
 ```
 
-## 2. 账号批量：只要顺畅原文
+## 2. 配置 AI 整理后端
 
-用于你的当前任务：拿一个账号主页链接，处理账号旗下可枚举视频，目标输出 AI 清洗后的顺畅原文。
-
-```powershell
-& $PYTHON $CLI account "<抖音账号主页URL>" --mode transcript
-```
-
-指定存放目录：
+自动批量整理使用环境变量中的 DeepSeek API key。不要把 key 写进仓库或文章目录：
 
 ```powershell
-& $PYTHON $CLI account "<抖音账号主页URL>" --mode transcript --out "D:\AI Skill\content-workspace\samples\李海涛（直男）"
+$env:DEEPSEEK_API_KEY = "<你的 key>"
 ```
 
-需要复用浏览器登录态时：
+默认模型为 `deepseek-v4-pro`；需要覆盖时设置 `DEEPSEEK_MODEL`。
+
+## 3. 先尝试 yt-dlp 直接账户流程
+
+需要“核心观点 + 完整原文”时运行：
 
 ```powershell
-& $PYTHON $CLI account "<抖音账号主页URL>" --mode transcript --cookies-from-browser chrome
+& $PYTHON $CLI account "<抖音账号主页URL>" --mode summary --out "<账户目录>" --cookies-from-browser edge
 ```
 
-如果 Chrome cookies 被锁，先完全关闭 Chrome 再试。Edge 同理：
+只需要 AI 清洗后的完整原文时把模式改成 `transcript`。如果浏览器数据库被锁，可关闭浏览器后重试，或使用未锁定的专用配置目录：
 
 ```powershell
-& $PYTHON $CLI account "<抖音账号主页URL>" --mode transcript --cookies-from-browser edge
+--cookies-from-browser "edge:D:\path\to\profile"
 ```
 
-## 3. 账号批量：原文 + AI 总结
+## 4. yt-dlp 不支持主页时的可行流程
 
-用于同时要核心观点和顺畅原文：
+1. 用 Codex 打开用户本人可访问的账户主页，滚动作品列表直到“暂时没有更多了”。
+2. 把可见的 `/video/<id>` 链接、标题和作者写入 `account-manifest.json`。
+3. 清单同时记录页面显示的 `declared_count` 和实际采集的 `accessible_count`；有差额时只记录，不猜测不可访问内容。
+4. 先跑 2 条样本：
 
 ```powershell
-& $PYTHON $CLI account "<抖音账号主页URL>" --mode summary
+& $PYTHON $CLI account-prepare "<account-manifest.json>" --mode summary --out "<账户目录>" --limit 2 --cookies-from-browser "edge:D:\path\to\profile"
+& $PYTHON $CLI account-refine --mode summary --out "<账户目录>"
 ```
 
-指定目录：
+5. 检查样本的来源、发布日期、核心观点和完整原文。通过后移除 `--limit`，续跑全量：
 
 ```powershell
-& $PYTHON $CLI account "<抖音账号主页URL>" --mode summary --out "D:\AI Skill\content-workspace\samples\<账号名>"
+& $PYTHON $CLI account-prepare "<account-manifest.json>" --mode summary --out "<账户目录>" --cookies-from-browser "edge:D:\path\to\profile"
+& $PYTHON $CLI account-refine --mode summary --out "<账户目录>"
 ```
 
-最终文章结构：
+`index.json` 会跳过已准备或已完成条目；失败项记录 `stage` 和 `error`，修复后重跑相同命令即可。
 
-```markdown
-## 核心观点
+如果没有自动 AI 后端，由 Codex 读取 `.requests\*.request.json`，写出包含 `core_viewpoints` 和 `cleaned_transcript` 的 response JSON，再逐条运行 `account-finalize`。
 
-...
+## 5. 输出文件和命名
 
-## 原文
-
-...
-```
-
-## 4. 输出文件怎么看
-
-账号批量目录里会出现：
+账户目录结构：
 
 ```text
+account-manifest.json
 index.json
 .requests\
-<video_id>.md
+<视频标题>.md
 ```
 
-- `index.json`：批量状态、去重、断点续跑记录。
-- `.requests\<video_id>.<mode>.request.json`：原始 ASR + AI 整理指令。
-- `<video_id>.md`：最终文章。`transcript` 模式只有 `## 原文`；`summary` 模式有 `## 核心观点` 和 `## 原文`。
+- `account-manifest.json`：账户清单与页面计数差额。
+- `index.json`：状态、去重和断点续跑记录。
+- `.requests\<video_id>.<mode>.request.json`：原始 ASR 和整理请求。
+- `.requests\<video_id>.<mode>.response.json`：AI 清洗原文和总结。
+- `<视频标题>.md`：最终文章；技术索引仍保留视频 ID，但面向用户的 Markdown 使用标题文件名。
 
-同一个目录、同一个模式重复运行时，已完成视频会跳过，失败视频会重试。
+Windows 不允许的半角标点会换成等义全角标点；标题过长会安全截断；同名作品用 ` (2)` 等序号区分。旧归档可迁移并同步 `index.json`：
 
-## 5. 当前重要边界
+```powershell
+& $PYTHON $CLI account-rename-articles --out "<账户目录>"
+```
 
-账号批量已经具备：账号枚举、逐条下载、FunASR 本地转写、请求文件写入、`index.json` 断点续跑。
-
-但默认 CLI 还没有接入自动 AI Refiner。也就是说，直接运行 `account` 时，如果进入 AI 清洗阶段，当前会明确记录失败，避免把未经 AI 清洗的 ASR 原文当成最终原文。
-
-现阶段可用两种方式完成最终文章：
-
-1. 由 Codex 代理读取 `.requests` 里的整理请求，批量写响应并 finalize。
-2. 下一步接入 OpenAI、本地模型或 Codex 文件流 Refiner，让 `account` 命令全自动产出最终文章。
+转写期间的音视频只存在于临时目录，完成后自动删除。
 
 ## 6. 单条视频试跑
 

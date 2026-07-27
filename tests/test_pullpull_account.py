@@ -1,4 +1,10 @@
-from pullpull.account import AccountVideo, YtDlpAccountEnumerator, enumerate_account
+from pullpull.account import (
+    AccountVideo,
+    YtDlpAccountEnumerator,
+    enumerate_account,
+    read_account_manifest,
+    write_account_manifest,
+)
 
 
 class FakePlaylistRunner:
@@ -78,3 +84,30 @@ def test_enumerator_passes_browser_cookies():
     )
 
     assert runner.calls[0][1]["cookiesfrombrowser"] == ("chrome",)
+
+
+def test_account_manifest_round_trip(tmp_path):
+    path = tmp_path / "account-manifest.json"
+    videos = [
+        AccountVideo(
+            video_id="111",
+            source_url="https://www.douyin.com/video/111",
+            title="第一条",
+            author="作者",
+            published_at="20260618",
+        )
+    ]
+
+    write_account_manifest(
+        path,
+        videos,
+        account_url="https://www.douyin.com/user/MS4wLjAB",
+        account_name="作者",
+        declared_count=2,
+    )
+
+    payload, loaded = read_account_manifest(path)
+    assert payload["account_name"] == "作者"
+    assert payload["declared_count"] == 2
+    assert payload["accessible_count"] == 1
+    assert loaded == videos

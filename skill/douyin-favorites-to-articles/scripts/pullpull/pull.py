@@ -8,6 +8,7 @@ from dfa.media import DownloadRunner, MediaResult, YtDlpRunner, download_media
 from dfa.models import VideoRef
 from dfa.urls import video_id_from_url
 
+from pullpull.filenames import article_path_for
 from pullpull.transcribe import FunasrTranscriber, Transcriber
 
 ENGINE_NAME = "funasr-paraformer-zh"
@@ -109,7 +110,11 @@ def pull(
         cookies_from_browser=cookies_from_browser,
     )
 
-    markdown_path = out_dir / f"{collected.video_id}.md"
+    markdown_path = article_path_for(
+        out_dir,
+        collected.media.title,
+        collected.video_id,
+    )
     markdown_path.write_text(
         render_markdown(
             video_id=collected.video_id,

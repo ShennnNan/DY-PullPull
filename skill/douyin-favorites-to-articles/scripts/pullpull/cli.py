@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import re
 
-from pullpull.account import enumerate_account
+from pullpull.account import enumerate_account, read_account_manifest
 from pullpull.article import (
     ArticleMode,
     finalize,
@@ -15,8 +15,15 @@ from pullpull.article import (
     request_from_collected,
     write_request,
 )
-from pullpull.batch import process_account_videos
+from pullpull.batch import (
+    finalize_account_video,
+    prepare_account_videos,
+    process_account_videos,
+    rename_completed_articles,
+    refine_prepared_account_videos,
+)
 from pullpull.pull import collect, pull
+from pullpull.refine_api import DeepSeekRefiner
 
 
 DEFAULT_ACCOUNT_ROOT = Path(r"D:\AI Skill\content-workspace\samples")
@@ -45,17 +52,13 @@ def _resolve_account_out(account_url: str, out: str | None, videos) -> Path:
 
 
 class AgentRefiner:
-    """Explicit boundary for Codex/agent refinement during batch runs.
+    """Configured automatic refinement backend for direct account runs."""
 
-    Batch logic must call a Refiner and must fail loudly when no AI cleanup
-    backend is connected, because raw ASR text is not a valid final article.
-    """
+    def __init__(self):
+        self.backend = DeepSeekRefiner.from_environment()
 
     def refine(self, request):
-        raise RuntimeError(
-            "AI refinement backend is not connected. Use request/finalize flow "
-            "or provide an automatic Refiner."
-        )
+        return self.backend.refine(request)
 
 
 def _cmd_pull(args) -> int:
@@ -114,6 +117,61 @@ def _cmd_account(args) -> int:
     return 0 if result.failed == 0 else 2
 
 
+def _cmd_account_prepare(args) -> int:
+    mode = ArticleMode(args.mode)
+    _, videos = read_account_manifest(Path(args.manifest))
+    if args.limit is not None:
+        videos = videos[: args.limit]
+    out_dir = Path(args.out) if args.out else Path(args.manifest).parent
+    result = prepare_account_videos(
+        videos,
+        out_dir=out_dir,
+        mode=mode,
+        cookies_from_browser=args.cookies_from_browser,
+    )
+    print(f"out: {out_dir}")
+    print(f"total: {result.total}")
+    print(f"prepared: {result.prepared}")
+    print(f"skipped: {result.skipped}")
+    print(f"failed: {result.failed}")
+    return 0 if result.failed == 0 else 2
+
+
+def _cmd_account_finalize(args) -> int:
+    path = finalize_account_video(
+        out_dir=Path(args.out),
+        request_path=Path(args.request),
+        response_path=Path(args.response),
+        mode=ArticleMode(args.mode),
+    )
+    print(f"article: {path}")
+    return 0
+
+
+def _cmd_account_refine(args) -> int:
+    result = refine_prepared_account_videos(
+        out_dir=Path(args.out),
+        mode=ArticleMode(args.mode),
+        refiner=DeepSeekRefiner.from_environment(),
+        limit=args.limit,
+    )
+    print(f"out: {args.out}")
+    print(f"total: {result.total}")
+    print(f"completed: {result.completed}")
+    print(f"failed: {result.failed}")
+    return 0 if result.failed == 0 else 2
+
+
+def _cmd_account_rename_articles(args) -> int:
+    result = rename_completed_articles(Path(args.out))
+    print(f"out: {args.out}")
+    print(f"total: {result.total}")
+    print(f"renamed: {result.renamed}")
+    print(f"skipped: {result.skipped}")
+    print(f"failed: {result.failed}")
+    return 0 if result.failed == 0 else 2
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="pullpull：抖音链接 → 下载 → FunASR 转写 → AI 整理（原文 + 总结）",
@@ -163,6 +221,69 @@ def main(argv=None) -> int:
         help="复用浏览器登录态，如 chrome / edge",
     )
     p_account.set_defaults(func=_cmd_account)
+
+    p_account_prepare = sub.add_parser(
+        "account-prepare",
+        help="账户清单 → 批量下载转写 → 整理请求",
+    )
+    p_account_prepare.add_argument("manifest", help="account-manifest.json 路径")
+    p_account_prepare.add_argument(
+        "--mode",
+        choices=[mode.value for mode in ArticleMode],
+        default=ArticleMode.SUMMARY.value,
+        help="transcript=顺畅原文；summary=核心观点+顺畅原文",
+    )
+    p_account_prepare.add_argument(
+        "--out",
+        default=None,
+        help="输出目录（默认使用 manifest 所在目录）",
+    )
+    p_account_prepare.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="仅处理清单前 N 条，用于样本验收",
+    )
+    p_account_prepare.add_argument(
+        "--cookies-from-browser",
+        default=None,
+        help=r"浏览器或 browser:profile，例如 edge:D:\profile",
+    )
+    p_account_prepare.set_defaults(func=_cmd_account_prepare)
+
+    p_account_finalize = sub.add_parser(
+        "account-finalize",
+        help="账户整理请求 + AI 响应 → Markdown + index.json",
+    )
+    p_account_finalize.add_argument("request", help="*.request.json 路径")
+    p_account_finalize.add_argument("response", help="*.response.json 路径")
+    p_account_finalize.add_argument(
+        "--mode",
+        choices=[mode.value for mode in ArticleMode],
+        default=ArticleMode.SUMMARY.value,
+    )
+    p_account_finalize.add_argument("--out", required=True, help="账户归档目录")
+    p_account_finalize.set_defaults(func=_cmd_account_finalize)
+
+    p_account_refine = sub.add_parser(
+        "account-refine",
+        help="用 DeepSeek 批量清洗已准备的转写并定稿",
+    )
+    p_account_refine.add_argument("--out", required=True, help="账户归档目录")
+    p_account_refine.add_argument(
+        "--mode",
+        choices=[mode.value for mode in ArticleMode],
+        default=ArticleMode.SUMMARY.value,
+    )
+    p_account_refine.add_argument("--limit", type=int, default=None)
+    p_account_refine.set_defaults(func=_cmd_account_refine)
+
+    p_account_rename = sub.add_parser(
+        "account-rename-articles",
+        help="把已完成文章从视频 ID 文件名迁移为标题文件名",
+    )
+    p_account_rename.add_argument("--out", required=True, help="账户归档目录")
+    p_account_rename.set_defaults(func=_cmd_account_rename_articles)
 
     args = parser.parse_args(argv)
     return args.func(args)
