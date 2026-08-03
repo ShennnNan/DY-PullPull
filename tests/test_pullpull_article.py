@@ -16,6 +16,7 @@ from pullpull.article import (
     request_from_collected,
     write_request,
 )
+from pullpull.filenames import safe_article_stem
 from pullpull.pull import Collected
 
 URL = "https://www.douyin.com/video/123"
@@ -143,9 +144,36 @@ def test_finalize_writes_article(tmp_path):
         _request(),
         RefinedArticle("总结", "原文"),
     )
-    assert path.name == "123.md"
+    assert path.name == "标题.md"
     body = path.read_text(encoding="utf-8")
     assert "总结" in body and "原文" in body
+
+
+def test_safe_article_stem_preserves_title_with_windows_safe_punctuation():
+    assert safe_article_stem('博士申请: RP/PS? "怎么选" *指南*', "123") == (
+        "博士申请： RP／PS？ ＂怎么选＂ ＊指南＊"
+    )
+
+
+def test_finalize_is_idempotent_for_same_video_and_disambiguates_same_title(tmp_path):
+    out_dir = tmp_path / "articles"
+    first_request = _request(
+        video_id="1234",
+        source_url="https://www.douyin.com/video/1234",
+        title="同名视频",
+    )
+    first = finalize(out_dir, first_request, RefinedArticle("总结", "原文"))
+    same = finalize(out_dir, first_request, RefinedArticle("新总结", "新原文"))
+    second = finalize(
+        out_dir,
+        _request(title="同名视频"),
+        RefinedArticle("总结二", "原文二"),
+    )
+
+    assert first == same
+    assert first.name == "同名视频.md"
+    assert second.name == "同名视频 (2).md"
+    assert len(list(out_dir.glob("*.md"))) == 2
 
 
 def test_finalize_with_refiner_uses_backend(tmp_path):

@@ -1,6 +1,6 @@
 ---
 name: douyin-favorites-to-articles
-description: 将用户本人可访问的抖音分享链接增量整理为本地 Markdown 文章。只需给出一条链接，即自动用 yt-dlp 下载视频、faster-whisper 本地转写（GPU 优先、CPU 回退），再生成文章。用于初始化、一键 pull、分步下载/转写、准备文章、校验并发布、查看状态、重试失败或清理临时数据。仅处理用户合法访问的内容；不得绕过登录、验证码、风控或访问控制。
+description: 将用户本人可访问的抖音单条视频或指定账户的全部可枚举作品，增量整理为本地 Markdown 文章。支持 yt-dlp 下载、FunASR 本地转写、AI 清洗原文与总结、账户清单、样本验收和断点续跑。用于账户作品归档、单链接提炼、失败重试和临时数据清理。仅处理用户合法访问的内容；不得绕过登录、验证码、风控或访问控制。
 ---
 
 # 抖音收藏文章提炼
@@ -33,23 +33,54 @@ description: 将用户本人可访问的抖音分享链接增量整理为本地 
 4. 运行 `finalize <video-id> --article <article.md 路径>`。
 5. 只有 CLI 输出 `completed` 后才向用户报告完成。
 
-## 账号批量流程
+## 账户作品归档
 
-账号批量用于处理某个抖音账号下可枚举的视频：
+目标是把指定账户的全部可访问作品保存为一视频一篇 Markdown，文件名使用视频标题；`summary` 模式包含 `## 核心观点` 和 `## 原文`。
+
+先尝试用 yt-dlp 直接枚举账户主页：
 
 ```powershell
 & $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <账号主页URL> --mode transcript
 & $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <账号主页URL> --mode summary
 ```
 
+直接账户命令使用 `DEEPSEEK_API_KEY` 配置的后端整理文本；未配置时改用下述两阶段流程，并由当前代理生成 response。
+
+若当前 yt-dlp 不支持该主页 URL，则用用户现有登录态打开账户主页，滚动作品列表至“暂时没有更多了”，采集可见的 `/video/<id>` 链接、标题与作者，写成 `account-manifest.json`。不得把页面作品计数误当成已采集数量；清单必须同时记录 `declared_count` 和 `accessible_count`，并明确任何差额。不要猜测或伪造不可访问作品。
+
+对清单采用两阶段流程，先用少量样本验收，再移除 `--limit` 断点续跑全量：
+
+```powershell
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account-prepare <account-manifest.json> --mode summary --out <账户目录> --limit 3 --cookies-from-browser "edge:D:\path\to\profile"
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account-refine --mode summary --out <账户目录>
+```
+
+`account-prepare` 逐条下载和转写，写入 `.requests/<id>.<mode>.request.json`；媒体仅在临时目录存在，转写结束即删除。读取 request 后生成同目录 response JSON：
+
+```json
+{
+  "core_viewpoints": "仅依据转写整理的简洁总结",
+  "cleaned_transcript": "纠正明显同音错字并整理断句后的完整原文"
+}
+```
+
+若环境变量 `DEEPSEEK_API_KEY` 已配置，优先运行 `account-refine` 自动生成 response 并逐条定稿；默认模型是 `deepseek-v4-pro`，可用 `DEEPSEEK_MODEL` 覆盖。不得打印 API key。没有自动后端时，按上述 JSON 格式手动写 response，再逐条执行 `account-finalize`。
+
+样本合格后，对同一输出目录重跑 `account-prepare` 且不传 `--limit`，再运行 `account-refine`；`index.json` 会跳过已准备或已完成的条目。失败条目保留阶段和错误信息，可在问题修复后重跑。
+
+最终文章使用 `<视频标题>.md`。Windows 禁止的半角标点替换为等义全角标点，标题超过安全长度时截断并加省略号；同名视频使用 ` (2)` 等序号防止覆盖。旧版 `<video_id>.md` 用以下命令迁移并同步 `index.json`：
+
+```powershell
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account-rename-articles --out <账户目录>
+```
+
 - `transcript`：ASR 后用 AI 清洗错字、错句和断句，最终文章只输出 `## 原文`。
 - `summary`：在 `transcript` 基础上总结核心观点，最终文章输出 `## 核心观点` 和 `## 原文`。
 - 默认模式是 `transcript`。
-- 默认输出到 `D:\AI Skill\content-workspace\samples\<账号名>`；需要自定义目录时加 `--out <目录>`。
+- 始终尊重用户指定的输出目录；未指定时才使用 CLI 默认值。
 - 批量任务会写 `index.json` 用于去重和断点续跑。
-- 需要登录态时使用 `--cookies-from-browser chrome`，只处理用户本人合法可访问的内容。
-
-当前 CLI 已保留 AI Refiner 边界。若未连接自动 AI 后端，批量流程会明确失败，不会把未经 AI 清洗的 ASR 原文伪装成最终文章。
+- 需要登录态时使用 `--cookies-from-browser chrome`、`edge`，或 `browser:profile-path` 指定未锁定的专用浏览器配置目录。只复用用户本人已有的登录态，不读取或展示 cookie 值。
+- 不要把未经 AI 清洗的 ASR 原文伪装成最终文章；只有 `account-finalize` 成功且索引状态为 `completed` 才算完成。
 
 手动整理单条 request 时，`finalize` 也支持同样的模式：
 
@@ -70,7 +101,8 @@ description: 将用户本人可访问的抖音分享链接增量整理为本地 
 ## 能力边界
 
 - v0.2 已支持：单链接自动下载（yt-dlp）+ 本地语音转写（faster-whisper，GPU 优先、CPU 回退）。
-- v0.2 尚未支持：收藏页/账户的批量自动采集、关键帧与 OCR。不要声称这些已可用。
+- 已支持：账户主页直接枚举，或在 yt-dlp 不支持主页时从浏览器生成清单；账户批量转写、AI 整理、断点续跑和逐条归档。
+- 尚未支持：从页面计数恢复不可访问作品、关键帧与 OCR。不要声称这些已可用。
 - GPU 不可用时会自动回退 CPU，并在输出中注明实际设备。
 
 ## 状态与清理
@@ -82,7 +114,7 @@ description: 将用户本人可访问的抖音分享链接增量整理为本地 
 
 ## 内容约束
 
-- 仅依据转写和 OCR 材料整理。
+- 仅依据转写材料整理；未启用 OCR 时不补写画面中才出现的信息。
 - 保留原链接。
 - 不猜测缺失事实。
 - 不发布、转载或上传视频内容。

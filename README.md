@@ -24,10 +24,10 @@ DY-PullPull 是一个 Windows Codex Skill。两个最终目标：
 
 - **P1 单条闭环已完成**：一条抖音视频链接可以自动经 `yt-dlp` 下载、FunASR `paraformer-zh` 本地转写，并生成含 `## 原文` 的 Markdown。
 - **P2 AI 整理契约已完成**：`request` / `finalize` 流程支持把原始转写交给代理或后端清洗，生成 `## 核心观点` + `## 原文`。
-- **P3 账户批量基础已完成**：已新增账号主页枚举、批量 runner、`index.json` 去重与断点续跑、`transcript` / `summary` 两种任务模式。
+- **P3 账户作品归档已跑通**：支持账号主页枚举或浏览器清单回退、批量下载、FunASR 转写、DeepSeek 自动整理、`index.json` 断点续跑及标题文件名。
 - **媒体兼容性已增强**：无系统 FFmpeg 时，会用 PyAV 将视频音频转为 16k WAV 再交给 FunASR。
 
-当前仍未完成的是自动 AI 后端接入：账号批量流程已经强制走 `Refiner` 接口，但默认 CLI 只保留明确失败边界，避免把未经 AI 清洗的 ASR 原文伪装成最终文章。
+真实账户验收已完成：主页显示 13 条作品，浏览器实际枚举到 12 条可访问作品；12 条均完成转写、总结和本地归档，0 失败。不可访问的差额只记录，不猜测内容。
 
 已经完成的主要模块：
 
@@ -52,7 +52,7 @@ DY-PullPull 是一个 Windows Codex Skill。两个最终目标：
 
 1. **P1 单条闭环**：链接 → 一份含转写的 Markdown。
 2. **P2 AI 整理**：原文清洗纠错 + 生成总结，两段分别保存。
-3. **P3 账户批量（目标 2）**：yt-dlp 账户枚举 + 批量逐条 + 索引去重、断点续跑。
+3. **P3 账户批量（目标 2）**：已完成；yt-dlp 账户枚举或浏览器清单回退 + 批量逐条 + AI 整理 + 索引去重、断点续跑。
 4. **P4 公开收藏（目标 1）**：收藏页枚举（先做免登录可行性 spike）。
 
 文档：
@@ -80,12 +80,31 @@ DY-PullPull 是一个 Windows Codex Skill。两个最终目标：
 
 生成整理请求 JSON，再用代理或后端写响应 JSON。`--mode transcript` 只输出清洗原文；`--mode summary` 输出核心观点和清洗原文。
 
+配置 `DEEPSEEK_API_KEY` 后，先尝试直接账户流程：
+
 ```powershell
-& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <抖音账号主页URL> --mode transcript
-& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <抖音账号主页URL> --mode summary
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account <抖音账号主页URL> --mode summary --out <账户目录> --cookies-from-browser edge
 ```
 
-枚举账号主页视频并批量处理。默认写入 `D:\AI Skill\content-workspace\samples\<账号名>`，也可以用 `--out` 指定目录。`transcript` 产出 AI 清洗后的顺畅原文；`summary` 额外产出核心观点。当前批量命令需要接入自动 `Refiner` 后端后才能直接产出最终文章，否则会明确失败。
+若当前 yt-dlp 不支持账户主页 URL，则由 Codex 使用用户现有浏览器登录态滚动作品页，生成同时记录 `declared_count` / `accessible_count` 的 `account-manifest.json`，再执行可验收、可续跑的两阶段流程：
+
+```powershell
+# 先试 2 条
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account-prepare <account-manifest.json> --mode summary --out <账户目录> --limit 2 --cookies-from-browser "edge:D:\path\to\profile"
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account-refine --mode summary --out <账户目录>
+
+# 样本通过后续跑全量；前 2 条自动跳过
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account-prepare <account-manifest.json> --mode summary --out <账户目录> --cookies-from-browser "edge:D:\path\to\profile"
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account-refine --mode summary --out <账户目录>
+```
+
+每条最终保存为 `<视频标题>.md`，包含来源、发布日期、`## 核心观点` 和 `## 原文`。Windows 非法文件名符号会替换为等义全角符号；同名作品使用 ` (2)` 后缀，不会相互覆盖。历史 `<video_id>.md` 可迁移：
+
+```powershell
+& $PYTHON "$SKILL_ROOT\scripts\pullpull_cli.py" account-rename-articles --out <账户目录>
+```
+
+完整本地操作与故障恢复见 [本地使用手册](docs/customer/local-usage.md)。
 
 ### 备选计划（原重设计）
 

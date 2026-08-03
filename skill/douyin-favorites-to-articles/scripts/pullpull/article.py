@@ -6,6 +6,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
+from pullpull.filenames import article_path_for
 from pullpull.pull import Collected
 
 ENGINE_NAME = "funasr-paraformer-zh"
@@ -132,7 +133,7 @@ def finalize(
 ) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    article_path = out_dir / f"{request.video_id}.md"
+    article_path = article_path_for(out_dir, request.title, request.video_id)
     article_path.write_text(
         render_article(request=request, refined=refined, mode=mode), encoding="utf-8"
     )

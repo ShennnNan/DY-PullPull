@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Protocol
 
+from dfa.media import parse_browser_cookie_source
 from dfa.urls import normalize_source_url, video_id_from_url
 
 
@@ -45,7 +48,9 @@ class YtDlpAccountEnumerator:
             "noprogress": True,
         }
         if cookies_from_browser:
-            options["cookiesfrombrowser"] = (cookies_from_browser,)
+            options["cookiesfrombrowser"] = parse_browser_cookie_source(
+                cookies_from_browser
+            )
         info = self.runner.extract_info(account_url, options)
         return _videos_from_playlist(info)
 
@@ -100,3 +105,56 @@ def enumerate_account(
         account_url,
         cookies_from_browser=cookies_from_browser,
     )
+
+
+def write_account_manifest(
+    path: Path | str,
+    videos: list[AccountVideo],
+    *,
+    account_url: str,
+    account_name: str | None = None,
+    declared_count: int | None = None,
+) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "account_url": account_url,
+        "account_name": account_name,
+        "declared_count": declared_count,
+        "accessible_count": len(videos),
+        "videos": [asdict(video) for video in videos],
+    }
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return path
+
+
+def read_account_manifest(
+    path: Path | str,
+) -> tuple[dict, list[AccountVideo]]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict) or not isinstance(payload.get("videos"), list):
+        raise ValueError("账户清单必须包含 videos 数组")
+
+    videos: list[AccountVideo] = []
+    seen: set[str] = set()
+    for item in payload["videos"]:
+        if not isinstance(item, dict):
+            raise ValueError("账户清单中的视频记录必须是对象")
+        source_url = normalize_source_url(str(item.get("source_url") or ""))
+        video_id = str(item.get("video_id") or video_id_from_url(source_url))
+        if video_id in seen:
+            continue
+        seen.add(video_id)
+        videos.append(
+            AccountVideo(
+                video_id=video_id,
+                source_url=source_url,
+                title=item.get("title"),
+                author=item.get("author"),
+                published_at=item.get("published_at"),
+            )
+        )
+    return payload, videos

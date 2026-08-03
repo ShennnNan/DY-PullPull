@@ -292,7 +292,7 @@ def test_pullpull_finalize_supports_transcript_mode(tmp_path):
         ]
     )
 
-    article = (out_dir / "123.md").read_text(encoding="utf-8")
+    article = (out_dir / "Test title.md").read_text(encoding="utf-8")
     assert result == 0
     assert "mode: transcript" in article
     assert "## 原文" in article

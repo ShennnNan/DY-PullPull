@@ -39,6 +39,14 @@ class DownloadRunner(Protocol):
     def run(self, url: str, options: dict) -> None: ...
 
 
+def parse_browser_cookie_source(source: str) -> tuple[str, ...]:
+    """Parse ``browser[:profile]`` into yt-dlp's cookiesfrombrowser tuple."""
+    browser, separator, profile = source.partition(":")
+    if separator and profile:
+        return browser, profile
+    return (browser,)
+
+
 def build_options(workspace: Path, video_id: str, cookies_from_browser: str | None) -> dict:
     """构造 yt-dlp 选项：输出到工作目录、写 info.json，可选复用浏览器 Cookie。"""
     options: dict = {
@@ -49,7 +57,9 @@ def build_options(workspace: Path, video_id: str, cookies_from_browser: str | No
         "noprogress": True,
     }
     if cookies_from_browser:
-        options["cookiesfrombrowser"] = (cookies_from_browser,)
+        options["cookiesfrombrowser"] = parse_browser_cookie_source(
+            cookies_from_browser
+        )
     return options
 
 
